@@ -10,6 +10,7 @@ uvicorn = "*"
 gunicorn = "*"
 pydantic = {extras = ["dotenv"], version = "*"}
 jinja2 = "*"
+python-multipart = "*"
 
 [dev-packages]
 black = "*"
