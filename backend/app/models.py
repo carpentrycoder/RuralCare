@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Boolean, String, Numeric, ForeignKey
+from sqlalchemy import Column, Integer, Boolean, String, Numeric, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from app.database import Base
 
@@ -61,6 +61,16 @@ class Patient(Base):
     health_metrics = Column(JSONB, default=dict)
     health_records = Column(JSONB, default=list)
     prescriptions  = Column(JSONB, default=list)
+
+
+class SymptomRecord(Base):
+    __tablename__ = "symptom_records"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    patient_id   = Column(Integer, ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    symptom_name = Column(String, nullable=False)
+    duration     = Column(String, nullable=False)
+    recorded_at  = Column(DateTime(timezone=True), nullable=False, index=True)
 
 
 # -------------------------

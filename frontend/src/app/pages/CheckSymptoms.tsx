@@ -1,10 +1,32 @@
-import { useState } from "react";
-import { Search, AlertCircle, CheckCircle, Clock, Thermometer, Activity } from "lucide-react";
+import { useState, useEffect } from "react";
+import { AlertCircle, CheckCircle, Clock, Thermometer, Activity, Trash2, Loader2 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+
+interface SavedSymptom {
+  id?: number;
+  symptom_name: string;
+  duration: string;
+  recorded_at: string;
+}
+
+interface PatientData {
+  id: number;
+  user_id: number;
+  name: string;
+  symptoms: SavedSymptom[];
+}
 
 export function CheckSymptoms() {
+  const { user } = useAuth();
+  
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [duration, setDuration] = useState("");
-  const [showResults, setShowResults] = useState(false);
+  
+  const [patient, setPatient] = useState<PatientData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const commonSymptoms = [
     { id: "fever", label: "Fever", icon: Thermometer },
@@ -21,6 +43,38 @@ export function CheckSymptoms() {
     { id: "dizziness", label: "Dizziness", icon: Activity },
   ];
 
+  // Fetch patient data on mount
+  useEffect(() => {
+    const fetchPatient = async () => {
+      if (!user.userId) {
+        setError("Please log in as a patient to track symptoms");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/patients/by-user/${user.userId}`);
+        if (!res.ok) {
+          if (res.status === 404) {
+            setPatient(null);
+            setLoading(false);
+            return;
+          }
+          throw new Error("Failed to load patient data");
+        }
+
+        const data: PatientData = await res.json();
+        setPatient(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load patient data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPatient();
+  }, [user.userId]);
+
   const toggleSymptom = (symptomId: string) => {
     setSelectedSymptoms((prev) =>
       prev.includes(symptomId)
@@ -29,17 +83,125 @@ export function CheckSymptoms() {
     );
   };
 
-  const handleCheckSymptoms = () => {
-    if (selectedSymptoms.length > 0 && duration) {
-      setShowResults(true);
+  const handleAddSymptom = async () => {
+    if (selectedSymptoms.length === 0 || !duration) {
+      setError("Please select at least one symptom and duration");
+      return;
+    }
+
+    if (!patient || !patient.id) {
+      setError("Patient record not found. Please try again.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      const symptomNames = selectedSymptoms.map(
+        (symptomId) => commonSymptoms.find((symptom) => symptom.id === symptomId)?.label || symptomId
+      );
+
+      const res = await fetch(`/patients/${patient.id}/symptoms/batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symptom_names: symptomNames,
+          duration,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.text();
+        throw new Error(`Failed to save symptoms: ${errorData}`);
+      }
+
+      const count = symptomNames.length;
+      const refreshRes = await fetch(`/patients/by-user/${user.userId}`);
+      if (refreshRes.ok) {
+        const data: PatientData = await refreshRes.json();
+        setPatient(data);
+      }
+
+      setSelectedSymptoms([]);
+      setDuration("");
+      setSuccessMessage(`${count} symptom record(s) saved successfully.`);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save symptom");
+      console.error("Save error:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveSymptom = async (symptomName: string, recordedAt: string, symptomId?: number) => {
+    if (!patient || !patient.id) return;
+
+    setSaving(true);
+    try {
+      const params = new URLSearchParams();
+      if (symptomId) {
+        params.set("symptom_id", String(symptomId));
+      } else {
+        params.set("recorded_at", recordedAt);
+      }
+      const res = await fetch(
+        `/patients/${patient.id}/symptoms/${encodeURIComponent(symptomName)}?${params.toString()}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!res.ok) throw new Error("Failed to remove symptom");
+
+      // Refresh patient data
+      const res2 = await fetch(`/patients/by-user/${user.userId}`);
+      if (res2.ok) {
+        const data: PatientData = await res2.json();
+        setPatient(data);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove symptom");
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleReset = () => {
     setSelectedSymptoms([]);
     setDuration("");
-    setShowResults(false);
+    setError("");
+    setSuccessMessage("");
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] py-8 md:py-12 flex items-center justify-center">
+        <div className="flex items-center gap-3 text-[#64748B]">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Loading your health data...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user.userId) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] py-8 md:py-12">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-6 text-center">
+            <AlertCircle className="w-12 h-12 text-rose-500 mx-auto mb-3" />
+            <h2 className="text-xl font-bold text-rose-700 mb-2">Login Required</h2>
+            <p className="text-rose-600">Please log in as a patient to track and save symptoms.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] py-8 md:py-12">
@@ -53,191 +215,189 @@ export function CheckSymptoms() {
             Check Your Symptoms
           </h1>
           <p className="text-lg text-[#64748B]">
-            Select your symptoms and get AI-based health guidance
+            Log your symptoms and track them automatically with timestamps
           </p>
         </div>
 
-        {!showResults ? (
-          <>
-            {/* Select Symptoms */}
-            <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm mb-6">
-              <h2 className="text-xl text-[#1E293B] mb-4" style={{ fontWeight: 600 }}>
-                What symptoms are you experiencing?
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {commonSymptoms.map((symptom) => {
-                  const Icon = symptom.icon;
-                  const isSelected = selectedSymptoms.includes(symptom.id);
-                  return (
-                    <button
-                      key={symptom.id}
-                      onClick={() => toggleSymptom(symptom.id)}
-                      className={`p-4 rounded-2xl border-2 transition-all ${
-                        isSelected
-                          ? "border-[#4F7DF3] bg-[#4F7DF3]/5"
-                          : "border-gray-200 hover:border-[#4F7DF3]/50"
-                      }`}
-                    >
-                      <Icon
-                        className="w-6 h-6 mx-auto mb-2"
-                        style={{ color: isSelected ? "#4F7DF3" : "#64748B" }}
-                      />
-                      <p
-                        className="text-sm text-center"
-                        style={{
-                          fontWeight: 600,
-                          color: isSelected ? "#4F7DF3" : "#1E293B",
-                        }}
-                      >
-                        {symptom.label}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+        {error && (
+          <div className="mb-6 px-4 py-3 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
 
-            {/* Duration */}
-            <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm mb-6">
-              <h2 className="text-xl text-[#1E293B] mb-4" style={{ fontWeight: 600 }}>
-                How long have you had these symptoms?
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {["Less than 1 day", "1-3 days", "4-7 days", "More than 7 days"].map((option) => (
+        {successMessage && (
+          <div className="mb-6 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-700 text-sm flex items-start gap-3">
+            <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
+        {/* Input Form */}
+        <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm mb-6">
+          {/* Select Symptoms */}
+          <div className="mb-8">
+            <h2 className="text-xl text-[#1E293B] mb-4" style={{ fontWeight: 600 }}>
+              What symptoms are you experiencing?
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {commonSymptoms.map((symptom) => {
+                const Icon = symptom.icon;
+                const isSelected = selectedSymptoms.includes(symptom.id);
+                return (
                   <button
-                    key={option}
-                    onClick={() => setDuration(option)}
+                    key={symptom.id}
+                    onClick={() => toggleSymptom(symptom.id)}
                     className={`p-4 rounded-2xl border-2 transition-all ${
-                      duration === option
+                      isSelected
                         ? "border-[#4F7DF3] bg-[#4F7DF3]/5"
                         : "border-gray-200 hover:border-[#4F7DF3]/50"
                     }`}
                   >
-                    <Clock
+                    <Icon
                       className="w-6 h-6 mx-auto mb-2"
-                      style={{ color: duration === option ? "#4F7DF3" : "#64748B" }}
+                      style={{ color: isSelected ? "#4F7DF3" : "#64748B" }}
                     />
                     <p
                       className="text-sm text-center"
                       style={{
                         fontWeight: 600,
-                        color: duration === option ? "#4F7DF3" : "#1E293B",
+                        color: isSelected ? "#4F7DF3" : "#1E293B",
                       }}
                     >
-                      {option}
+                      {symptom.label}
                     </p>
                   </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Duration */}
+          <div className="mb-8">
+            <h2 className="text-xl text-[#1E293B] mb-4" style={{ fontWeight: 600 }}>
+              How long have you had these symptoms?
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {["Less than 1 day", "1-3 days", "4-7 days", "More than 7 days"].map((option) => (
+                <button
+                  key={option}
+                  onClick={() => setDuration(option)}
+                  className={`p-4 rounded-2xl border-2 transition-all ${
+                    duration === option
+                      ? "border-[#4F7DF3] bg-[#4F7DF3]/5"
+                      : "border-gray-200 hover:border-[#4F7DF3]/50"
+                  }`}
+                >
+                  <Clock
+                    className="w-6 h-6 mx-auto mb-2"
+                    style={{ color: duration === option ? "#4F7DF3" : "#64748B" }}
+                  />
+                  <p
+                    className="text-sm text-center"
+                    style={{
+                      fontWeight: 600,
+                      color: duration === option ? "#4F7DF3" : "#1E293B",
+                    }}
+                  >
+                    {option}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            onClick={handleAddSymptom}
+            disabled={selectedSymptoms.length === 0 || !duration || saving}
+            className={`w-full px-8 py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 font-semibold ${
+              selectedSymptoms.length === 0 || !duration || saving
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-[#4F7DF3] text-white hover:bg-[#3D6DE3]"
+            }`}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              `Save ${selectedSymptoms.length} Symptom(s)`
+            )}
+          </button>
+        </div>
+
+        {/* Saved Symptoms Timeline */}
+        {patient && patient.symptoms && patient.symptoms.length > 0 && (
+          <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm">
+            <h3 className="text-xl text-[#1E293B] mb-6" style={{ fontWeight: 600 }}>
+              Symptom History
+            </h3>
+            <div className="space-y-3">
+              {patient.symptoms
+                .slice()
+                .sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime())
+                .map((symptom, idx) => (
+                  <div
+                    key={symptom.id ?? `${symptom.symptom_name}-${symptom.recorded_at}-${idx}`}
+                    className="flex items-start justify-between p-4 bg-[#F8FAFC] rounded-xl border border-[rgba(0,0,0,0.06)] hover:border-[#4F7DF3] transition-colors"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-[#1E293B] font-semibold">{symptom.symptom_name}</p>
+                        <span className="px-2 py-1 bg-[#4F7DF3]/10 text-[#4F7DF3] text-xs rounded-full">
+                          {symptom.duration}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#94A3B8]">
+                        Recorded: {new Date(symptom.recorded_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveSymptom(symptom.symptom_name, symptom.recorded_at, symptom.id)}
+                      disabled={saving}
+                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0 ml-4"
+                      title="Remove symptom"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
                 ))}
-              </div>
             </div>
 
-            {/* Submit Button */}
-            <button
-              onClick={handleCheckSymptoms}
-              disabled={selectedSymptoms.length === 0 || !duration}
-              className={`w-full px-8 py-4 rounded-2xl transition-colors ${
-                selectedSymptoms.length === 0 || !duration
-                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-[#4F7DF3] text-white hover:bg-[#3D6DE3]"
-              }`}
-            >
-              Check Symptoms
-            </button>
-          </>
-        ) : (
-          <>
-            {/* AI Analysis Results */}
-            <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm mb-6">
-              <div className="flex items-start gap-3 mb-6">
-                <div className="w-12 h-12 rounded-full bg-[#4F7DF3]/10 flex items-center justify-center flex-shrink-0">
-                  <Search className="w-6 h-6 text-[#4F7DF3]" />
-                </div>
+            {/* Disclaimer */}
+            <div className="p-5 rounded-xl bg-[#4F7DF3]/10 border border-[#4F7DF3]/30 mt-6">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-6 h-6 text-[#4F7DF3] flex-shrink-0" />
                 <div>
-                  <h2 className="text-xl text-[#1E293B] mb-2" style={{ fontWeight: 600 }}>
-                    AI Analysis Results
-                  </h2>
-                  <p className="text-[#64748B]">
-                    Based on your symptoms: {selectedSymptoms.join(", ")} for {duration}
+                  <p className="text-sm text-[#1E293B]" style={{ fontWeight: 600 }}>
+                    Important Disclaimer
                   </p>
-                </div>
-              </div>
-
-              {/* Possible Conditions */}
-              <div className="space-y-4 mb-6">
-                <div className="p-5 rounded-xl bg-[#FFD6A5]/20 border border-[#FFD6A5]">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-lg text-[#1E293B]" style={{ fontWeight: 600 }}>
-                      Common Cold or Flu
-                    </h3>
-                    <span className="px-3 py-1 bg-[#FFD6A5] text-[#1E293B] rounded-full text-sm">
-                      85% Match
-                    </span>
-                  </div>
-                  <p className="text-[#64748B] mb-3">
-                    Your symptoms are commonly associated with viral infections like cold or flu.
+                  <p className="text-sm text-[#64748B] mt-1">
+                    This symptom tracker is for your records only. Please consult a healthcare professional for diagnosis and treatment.
                   </p>
-                  <div className="flex items-start gap-2">
-                    <CheckCircle className="w-5 h-5 text-[#A7E3C9] flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-[#64748B]">
-                      Usually resolves on its own with rest and hydration
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-5 rounded-xl bg-[#A7E3C9]/20 border border-[#A7E3C9]">
-                  <h3 className="text-lg text-[#1E293B] mb-2" style={{ fontWeight: 600 }}>
-                    Recommendations
-                  </h3>
-                  <ul className="space-y-2 text-[#64748B]">
-                    <li className="flex items-start gap-2">
-                      <CheckCircle className="w-5 h-5 text-[#A7E3C9] flex-shrink-0 mt-0.5" />
-                      <span>Get adequate rest and stay hydrated</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <CheckCircle className="w-5 h-5 text-[#A7E3C9] flex-shrink-0 mt-0.5" />
-                      <span>Take over-the-counter pain relievers if needed</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <CheckCircle className="w-5 h-5 text-[#A7E3C9] flex-shrink-0 mt-0.5" />
-                      <span>Monitor your temperature regularly</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Disclaimer */}
-              <div className="p-5 rounded-xl bg-[#4F7DF3]/10 border border-[#4F7DF3]/30">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-6 h-6 text-[#4F7DF3] flex-shrink-0" />
-                  <div>
-                    <p className="text-sm text-[#1E293B]" style={{ fontWeight: 600 }}>
-                      Important Disclaimer
-                    </p>
-                    <p className="text-sm text-[#64748B] mt-1">
-                      This AI suggestion is not a medical diagnosis. Please consult a doctor
-                      for proper medical advice and treatment.
-                    </p>
-                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <button
-                onClick={handleReset}
-                className="flex-1 px-8 py-4 bg-white text-[#4F7DF3] border-2 border-[#4F7DF3] rounded-2xl hover:bg-[#F8FAFC] transition-colors"
-              >
-                Check Again
-              </button>
-              <button
-                onClick={() => (window.location.href = "/talk-to-doctor")}
-                className="flex-1 px-8 py-4 bg-[#4F7DF3] text-white rounded-2xl hover:bg-[#3D6DE3] transition-colors"
-              >
-                Consult a Doctor
-              </button>
-            </div>
-          </>
+            {/* Action Button */}
+            <button
+              onClick={() => (window.location.href = "/talk-to-doctor")}
+              className="w-full mt-6 px-8 py-4 bg-[#4F7DF3] text-white rounded-2xl hover:bg-[#3D6DE3] transition-colors font-semibold"
+            >
+              Consult a Doctor
+            </button>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {(!patient || !patient.symptoms || patient.symptoms.length === 0) && !loading && (
+          <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
+            <Activity className="w-12 h-12 text-[#94A3B8] mx-auto mb-4" />
+            <p className="text-lg text-[#64748B]">No symptoms recorded yet.</p>
+            <p className="text-sm text-[#94A3B8] mt-2">Start by selecting your current symptoms above.</p>
+          </div>
         )}
       </div>
     </div>
