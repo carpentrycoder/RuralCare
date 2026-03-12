@@ -134,7 +134,7 @@ function FormModal({ initial, editingId, onSave, onClose }: FormModalProps) {
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
           {/* Row 1 */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Medicine Name *</label>
               <input required value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Metformin" className={fieldClass} />
@@ -146,7 +146,7 @@ function FormModal({ initial, editingId, onSave, onClose }: FormModalProps) {
           </div>
 
           {/* Row 2 */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Category *</label>
               <select required value={form.category} onChange={e => set("category", e.target.value as Category)} className={fieldClass}>
@@ -166,7 +166,7 @@ function FormModal({ initial, editingId, onSave, onClose }: FormModalProps) {
           </div>
 
           {/* Row 3 */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Price (₹) *</label>
               <input required type="number" min={0} value={form.price || ""} onChange={e => set("price", Number(e.target.value))} placeholder="0.00" className={fieldClass} />
@@ -182,7 +182,7 @@ function FormModal({ initial, editingId, onSave, onClose }: FormModalProps) {
           </div>
 
           {/* Row 4 */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Manufacturer *</label>
               <input required value={form.manufacturer} onChange={e => set("manufacturer", e.target.value)} placeholder="e.g. Sun Pharma" className={fieldClass} />
@@ -392,12 +392,12 @@ export function PharmaAdmin() {
             </div>
 
             {/* Category filter */}
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8] pointer-events-none" />
               <select
                 value={filterCategory}
                 onChange={e => setFilterCategory(e.target.value as "All" | Category)}
-                className="pl-10 pr-8 py-2.5 rounded-xl border border-[rgba(0,0,0,0.08)] text-sm text-[#1E293B] bg-[#F8FAFC] outline-none focus:border-[#4F7DF3] appearance-none cursor-pointer"
+                className="w-full pl-10 pr-8 py-2.5 rounded-xl border border-[rgba(0,0,0,0.08)] text-sm text-[#1E293B] bg-[#F8FAFC] outline-none focus:border-[#4F7DF3] appearance-none cursor-pointer"
               >
                 <option value="All">All Categories</option>
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
@@ -406,11 +406,11 @@ export function PharmaAdmin() {
             </div>
 
             {/* Status filter */}
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <select
                 value={filterStatus}
                 onChange={e => setFilterStatus(e.target.value as "All" | StockStatus)}
-                className="pl-4 pr-8 py-2.5 rounded-xl border border-[rgba(0,0,0,0.08)] text-sm text-[#1E293B] bg-[#F8FAFC] outline-none focus:border-[#4F7DF3] appearance-none cursor-pointer"
+                className="w-full pl-4 pr-8 py-2.5 rounded-xl border border-[rgba(0,0,0,0.08)] text-sm text-[#1E293B] bg-[#F8FAFC] outline-none focus:border-[#4F7DF3] appearance-none cursor-pointer"
               >
                 <option value="All">All Status</option>
                 <option>In Stock</option>
@@ -430,7 +430,59 @@ export function PharmaAdmin() {
 
         {/* Table */}
         <div className="bg-white rounded-2xl border border-[rgba(79,125,243,0.08)] shadow-[0_1px_3px_rgba(0,0,0,0.06)] overflow-hidden">
-          <div className="overflow-x-auto">
+
+          {/* Mobile card list — visible only on xs */}
+          <div className="sm:hidden">
+            {filtered.length === 0 ? (
+              <div className="py-12 text-center text-[#94A3B8] text-sm">
+                <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                No medicines found.
+              </div>
+            ) : filtered.map((m) => {
+              const status = getStockStatus(m.stock, m.minStock);
+              const stockBarColor = status === "In Stock" ? "#22c55e" : status === "Low Stock" ? "#f59e0b" : "#f43f5e";
+              return (
+                <div key={m.id} className="p-4 border-b border-[rgba(0,0,0,0.04)] last:border-0 hover:bg-[#F8FAFC]">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-[#1E293B] text-sm truncate">{m.name}</p>
+                      <p className="text-xs text-[#94A3B8] mt-0.5">{m.brand} · {m.manufacturer}</p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button onClick={() => openEdit(m)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#EEF2FF] text-[#4F7DF3] transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setDeleteConfirm(m.id)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-rose-50 text-rose-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${categoryColors[m.category]}`}>{categoryIcons[m.category]}{m.category}</span>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${stockStatusStyles[status]}`}>{status}</span>
+                    {m.prescription && <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 text-[10px] font-semibold">Rx</span>}
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
+                    <div className="bg-[#F8FAFC] rounded-lg p-2">
+                      <p className="text-[#94A3B8] text-[10px]">Dose</p>
+                      <p className="font-semibold text-[#1E293B] mt-0.5 truncate">{m.dose}</p>
+                    </div>
+                    <div className="bg-[#F8FAFC] rounded-lg p-2">
+                      <p className="text-[#94A3B8] text-[10px]">Price</p>
+                      <p className="font-semibold text-[#1E293B] mt-0.5">₹{m.price}</p>
+                    </div>
+                    <div className="bg-[#F8FAFC] rounded-lg p-2">
+                      <p className="text-[#94A3B8] text-[10px]">Stock</p>
+                      <p className="font-semibold mt-0.5" style={{ color: stockBarColor }}>{m.stock}</p>
+                    </div>
+                    <div className="bg-[#F8FAFC] rounded-lg p-2">
+                      <p className="text-[#94A3B8] text-[10px]">Expiry</p>
+                      <p className="font-semibold text-[#1E293B] mt-0.5">{m.expiry || "—"}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table — hidden on xs */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[rgba(0,0,0,0.06)] bg-[#F8FAFC]">

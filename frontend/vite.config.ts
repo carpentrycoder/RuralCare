@@ -21,6 +21,7 @@ export default defineConfig({
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
   server: {
+    allowedHosts: ['kamden-unbudging-nonlethargically.ngrok-free.dev'],
     proxy: {
       '/ws': {
         target: 'ws://localhost:8000',

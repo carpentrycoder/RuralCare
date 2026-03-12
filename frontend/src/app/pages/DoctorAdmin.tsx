@@ -188,7 +188,7 @@ function DoctorModal({ initial, editingId, onSave, onClose }: ModalProps) {
 
           {/* Basic */}
           <div className={sc}>Doctor Details</div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={lc}>Full Name *</label>
               <input required value={form.name} onChange={e => f("name", e.target.value)} placeholder="Dr. First Last" className={fc} />
@@ -199,7 +199,7 @@ function DoctorModal({ initial, editingId, onSave, onClose }: ModalProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className={lc}>Specialty *</label>
               <select required value={form.specialty} onChange={e => f("specialty", e.target.value as Specialty)} className={fc}>
@@ -218,7 +218,7 @@ function DoctorModal({ initial, editingId, onSave, onClose }: ModalProps) {
 
           {/* Location */}
           <div className={sc}>Location &amp; Contact</div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={lc}>City *</label>
               <input required value={form.city} onChange={e => f("city", e.target.value)} placeholder="e.g. Pune" className={fc} />
@@ -232,7 +232,7 @@ function DoctorModal({ initial, editingId, onSave, onClose }: ModalProps) {
             <label className={lc}>Hospital / Clinic *</label>
             <input required value={form.hospital} onChange={e => f("hospital", e.target.value)} placeholder="e.g. City Health Clinic" className={fc} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={lc}>Phone *</label>
               <input required type="tel" value={form.phone} onChange={e => f("phone", e.target.value)} placeholder="+91 98700 00000" className={fc} />
@@ -549,22 +549,22 @@ export function DoctorAdmin() {
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[rgba(0,0,0,0.08)] text-sm text-[#1E293B] bg-[#F8FAFC] outline-none focus:border-[#4F7DF3] focus:ring-2 focus:ring-[#4F7DF3]/20 placeholder:text-[#94A3B8]"
               />
             </div>
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <select
                 value={filterSpec}
                 onChange={e => setFilterSpec(e.target.value as "All" | Specialty)}
-                className="pl-4 pr-8 py-2.5 rounded-xl border border-[rgba(0,0,0,0.08)] text-sm text-[#1E293B] bg-[#F8FAFC] outline-none focus:border-[#4F7DF3] appearance-none cursor-pointer"
+                className="w-full pl-4 pr-8 py-2.5 rounded-xl border border-[rgba(0,0,0,0.08)] text-sm text-[#1E293B] bg-[#F8FAFC] outline-none focus:border-[#4F7DF3] appearance-none cursor-pointer"
               >
                 <option value="All">All Specialties</option>
                 {SPECIALTIES.map(s => <option key={s}>{s}</option>)}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94A3B8] pointer-events-none" />
             </div>
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <select
                 value={filterAvail}
                 onChange={e => setFilterAvail(e.target.value as "All" | Availability)}
-                className="pl-4 pr-8 py-2.5 rounded-xl border border-[rgba(0,0,0,0.08)] text-sm text-[#1E293B] bg-[#F8FAFC] outline-none focus:border-[#4F7DF3] appearance-none cursor-pointer"
+                className="w-full pl-4 pr-8 py-2.5 rounded-xl border border-[rgba(0,0,0,0.08)] text-sm text-[#1E293B] bg-[#F8FAFC] outline-none focus:border-[#4F7DF3] appearance-none cursor-pointer"
               >
                 <option value="All">All Status</option>
                 <option>Available</option>

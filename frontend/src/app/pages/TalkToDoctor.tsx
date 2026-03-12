@@ -294,7 +294,6 @@ export function TalkToDoctor() {
   const navigate = useNavigate();
   const [selectedDoctor, setSelectedDoctor]   = useState<number | null>(null);
   const [consultationType, setConsultationType] = useState<"video" | "audio" | null>(null);
-  const [activeCall, setActiveCall] = useState<{ roomId: string; doctorName: string } | null>(null);
 
   const doctors = [
     {
@@ -335,31 +334,16 @@ export function TalkToDoctor() {
     },
   ];
 
-  const handleBookConsultation = () => {
-    if (!selectedDoctor || !consultationType) return;
+  const handleBookAudio = () => {
+    if (!selectedDoctor) return;
     const doctor = doctors.find(d => d.id === selectedDoctor);
     if (!doctor) return;
-
-    if (consultationType === "video") {
-      // Generate a unique room ID for this session
-      const roomId = `room-${selectedDoctor}-${Date.now()}`;
-      setActiveCall({ roomId, doctorName: doctor.name });
-    } else {
-      alert(`Audio consultation booking for ${doctor.name} — audio-only calls coming soon.`);
-    }
+    alert(`Audio consultation booking for ${doctor.name} — audio-only calls coming soon.`);
   };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] py-8 md:py-12">
 
-      {/* WebRTC Video Call Room overlay */}
-      {activeCall && (
-        <VideoCallRoom
-          roomId={activeCall.roomId}
-          doctorName={activeCall.doctorName}
-          onEnd={() => setActiveCall(null)}
-        />
-      )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
@@ -436,12 +420,27 @@ export function TalkToDoctor() {
               </p>
             </button>
           </div>
+
+          {/* Video Call CTA — shown immediately when Video selected, no doctor selection needed */}
+          {consultationType === "video" && (
+            <div className="mt-5 pt-5 border-t border-gray-100">
+              <p className="text-sm text-[#64748B] mb-4">
+                You’ll receive a shareable invite link — send it to your doctor so they can join the call.
+              </p>
+              <button
+                onClick={() => navigate(`/test-call?room=room-${Date.now()}`)}
+                className="w-full px-8 py-4 bg-[#4F7DF3] text-white rounded-2xl hover:bg-[#3D6DE3] transition-colors flex items-center justify-center gap-2 font-semibold"
+              >
+                <Video className="w-5 h-5" /> Start Video Call
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Available Doctors */}
         <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm mb-6">
           <h2 className="text-xl text-[#1E293B] mb-6" style={{ fontWeight: 600 }}>
-            Available Doctors
+            {consultationType === "audio" ? "Select a Doctor for Audio Consultation" : "Available Doctors"}
           </h2>
 
           <div className="grid gap-4">
@@ -501,17 +500,14 @@ export function TalkToDoctor() {
           </div>
         </div>
 
-        {/* Start Consultation Button */}
-        {selectedDoctor && consultationType && (
+        {/* Book Audio Consultation Button */}
+        {selectedDoctor && consultationType === "audio" && (
           <div className="bg-white rounded-2xl p-6 shadow-sm sticky bottom-4">
             <button
-              onClick={handleBookConsultation}
+              onClick={handleBookAudio}
               className="w-full px-8 py-4 bg-[#4F7DF3] text-white rounded-2xl hover:bg-[#3D6DE3] transition-colors flex items-center justify-center gap-2 font-semibold"
             >
-              {consultationType === "video"
-                ? <><Video className="w-5 h-5" /> Start Video Call</>
-                : <><Phone className="w-5 h-5" /> Book Audio Consultation</>
-              }
+              <Phone className="w-5 h-5" /> Book Audio Consultation
             </button>
           </div>
         )}

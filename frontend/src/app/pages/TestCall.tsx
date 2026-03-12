@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router";
 import {
-  Video, VideoOff, Mic, MicOff, PhoneOff, Copy, Check,
+  Video, VideoOff, Mic, MicOff, PhoneOff, Copy, Check, Share2,
   Wifi, WifiOff, Loader2, Users, Plus, LogIn,
 } from "lucide-react";
 
@@ -25,8 +26,10 @@ function randomRoomId() {
 // ── Main Test Page ────────────────────────────────────────────────────────────
 
 export function TestCall() {
-  const [phase,  setPhase]  = useState<"lobby" | "call">("lobby");
-  const [roomId, setRoomId] = useState("");
+  const [searchParams] = useSearchParams();
+  const urlRoom = searchParams.get("room") ?? "";
+  const [phase,  setPhase]  = useState<"lobby" | "call">(urlRoom ? "call" : "lobby");
+  const [roomId, setRoomId] = useState(urlRoom);
   const [joinInput, setJoinInput] = useState("");
 
   const handleCreate = () => {
@@ -122,9 +125,10 @@ function CallRoom({ roomId, onEnd }: { roomId: string; onEnd: () => void }) {
   const [status,   setStatus]  = useState<CallStatus>("connecting");
   const [micOn,    setMicOn]   = useState(true);
   const [camOn,    setCamOn]   = useState(true);
-  const [copied,   setCopied]  = useState(false);
-  const [log,      setLog]     = useState<string[]>([]);
-  const [peers,    setPeers]   = useState(0);
+  const [copied,     setCopied]    = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [log,        setLog]       = useState<string[]>([]);
+  const [peers,      setPeers]     = useState(0);
 
   const addLog = useCallback((msg: string) => {
     setLog(p => [...p.slice(-6), `${new Date().toLocaleTimeString()} — ${msg}`]);
@@ -298,6 +302,12 @@ function CallRoom({ roomId, onEnd }: { roomId: string; onEnd: () => void }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const copyLink = () => {
+    navigator.clipboard.writeText(`${window.location.origin}/test-call?room=${roomId}`);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   const statusColor: Record<CallStatus, string> = {
     idle:       "bg-slate-400",
     connecting: "bg-amber-400 animate-pulse",
@@ -310,7 +320,7 @@ function CallRoom({ roomId, onEnd }: { roomId: string; onEnd: () => void }) {
   const statusLabel: Record<CallStatus, string> = {
     idle:       "Idle",
     connecting: "Connecting…",
-    waiting:    `Waiting for second peer (${peers}/2)`,
+    waiting:    "You're waiting · share the invite link so others can join",
     connected:  "Connected",
     failed:     "Connection failed",
     ended:      "Call ended",
@@ -326,18 +336,30 @@ function CallRoom({ roomId, onEnd }: { roomId: string; onEnd: () => void }) {
           <span className="text-white font-semibold text-sm">{statusLabel[status]}</span>
         </div>
 
-        {/* Room ID badge */}
-        <button
-          onClick={copyRoom}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
-          title="Copy room ID"
-        >
-          <Users className="w-3.5 h-3.5 text-[#94A3B8]" />
-          <span className="text-[#4F7DF3] font-mono font-bold tracking-widest text-sm">{roomId}</span>
-          {copied
-            ? <Check className="w-3.5 h-3.5 text-emerald-400" />
-            : <Copy className="w-3.5 h-3.5 text-[#94A3B8]" />}
-        </button>
+        {/* Room ID badge + Share button */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={copyRoom}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+            title="Copy room ID"
+          >
+            <Users className="w-3.5 h-3.5 text-[#94A3B8]" />
+            <span className="text-[#4F7DF3] font-mono font-bold tracking-widest text-sm">{roomId}</span>
+            {copied
+              ? <Check className="w-3.5 h-3.5 text-emerald-400" />
+              : <Copy className="w-3.5 h-3.5 text-[#94A3B8]" />}
+          </button>
+          <button
+            onClick={copyLink}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#4F7DF3]/10 hover:bg-[#4F7DF3]/20 border border-[#4F7DF3]/20 transition-colors"
+            title="Copy invite link"
+          >
+            {copiedLink
+              ? <><Check className="w-3.5 h-3.5 text-emerald-400" /><span className="text-emerald-400 text-xs font-semibold">Copied!</span></>
+              : <><Share2 className="w-3.5 h-3.5 text-[#4F7DF3]" /><span className="text-[#4F7DF3] text-xs font-semibold">Share</span></>
+            }
+          </button>
+        </div>
 
         <div>
           {status === "connected"  && <Wifi    className="w-5 h-5 text-emerald-400" />}
@@ -365,16 +387,18 @@ function CallRoom({ roomId, onEnd }: { roomId: string; onEnd: () => void }) {
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                 <Video className="w-10 h-10 text-white/20" />
                 <span className="text-white/40 text-sm">
-                  {status === "waiting" ? "Waiting for peer…" : statusLabel[status]}
+                  {status === "waiting" ? "You're waiting for the other person to join…" : statusLabel[status]}
                 </span>
                 {(status === "waiting" || status === "connecting") && (
                   <div className="mt-1 text-center">
-                    <p className="text-[#94A3B8] text-xs mb-1">Share this room ID:</p>
-                    <button onClick={copyRoom} className="flex items-center gap-2 mx-auto px-4 py-2 bg-[#4F7DF3]/20 border border-[#4F7DF3]/30 rounded-xl hover:bg-[#4F7DF3]/30 transition-colors">
-                      <span className="text-[#4F7DF3] font-mono font-bold tracking-widest">{roomId}</span>
-                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-[#94A3B8]" />}
+                    <p className="text-[#94A3B8] text-xs mb-2">Share invite link with the other person:</p>
+                    <button onClick={copyLink} className="flex items-center gap-2 mx-auto px-4 py-2.5 bg-[#4F7DF3]/20 border border-[#4F7DF3]/30 rounded-xl hover:bg-[#4F7DF3]/30 transition-colors">
+                      {copiedLink
+                        ? <><Check className="w-3.5 h-3.5 text-emerald-400" /><span className="text-emerald-400 text-sm font-semibold">Link copied!</span></>
+                        : <><Share2 className="w-3.5 h-3.5 text-[#4F7DF3]" /><span className="text-[#4F7DF3] text-sm font-semibold">Copy invite link</span></>
+                      }
                     </button>
-                    <p className="text-[#64748B] text-xs mt-2">Open another tab → Go to /test-call → Join with this ID</p>
+                    <p className="text-[#64748B] text-xs mt-2">Room ID: <span className="font-mono text-[#4F7DF3] font-bold">{roomId}</span></p>
                   </div>
                 )}
               </div>
@@ -386,7 +410,7 @@ function CallRoom({ roomId, onEnd }: { roomId: string; onEnd: () => void }) {
         </div>
 
         {/* Debug log */}
-        <div className="lg:w-72 bg-[#0D1829] rounded-2xl border border-white/10 p-4 flex flex-col gap-2">
+        <div className="hidden lg:flex flex-col lg:w-72 bg-[#0D1829] rounded-2xl border border-white/10 p-4 gap-2">
           <div className="text-xs font-bold text-[#94A3B8] uppercase tracking-widest mb-1">Connection Log</div>
           <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
             {log.length === 0 && <p className="text-[#334155] text-xs italic">Waiting for events…</p>}
