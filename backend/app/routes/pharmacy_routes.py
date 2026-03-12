@@ -1,8 +1,9 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from app.database import get_db
 from app.models import Medicine
@@ -33,8 +34,40 @@ class MedicineOut(MedicineIn):
 
 # List MUST come before /{id} to avoid FastAPI routing ambiguity
 @router.get("/", response_model=list[MedicineOut])
-def list_medicines(db: Session = Depends(get_db)):
-    return db.query(Medicine).all()
+def list_medicines(
+    q: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Medicine)
+
+    if q:
+        search = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                Medicine.name.ilike(search),
+                Medicine.brand.ilike(search),
+                Medicine.manufacturer.ilike(search),
+                Medicine.dose.ilike(search),
+            )
+        )
+
+    if category and category != "All":
+        query = query.filter(Medicine.category == category)
+
+    medicines = query.order_by(Medicine.name.asc()).limit(limit).all()
+
+    if status and status != "All":
+        if status == "In Stock":
+            medicines = [medicine for medicine in medicines if medicine.stock > medicine.min_stock]
+        elif status == "Low Stock":
+            medicines = [medicine for medicine in medicines if 0 < medicine.stock <= medicine.min_stock]
+        elif status == "Out of Stock":
+            medicines = [medicine for medicine in medicines if medicine.stock == 0]
+
+    return medicines
 
 
 @router.post("/", response_model=MedicineOut, status_code=201)

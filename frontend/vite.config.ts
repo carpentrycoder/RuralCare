@@ -48,6 +48,10 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      '/pharmacies': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
       '/medicines': {
         target: 'http://localhost:8000',
         changeOrigin: true,

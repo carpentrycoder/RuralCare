@@ -20,6 +20,7 @@ from app.database import Base, engine
 from app.routes.auth_routes import router as auth_router
 from app.routes.doctor_routes import router as doctor_router
 from app.routes.patient_routes import router as patient_router
+from app.routes.pharmacist_routes import router as pharmacist_router
 from app.routes.pharmacy_routes import router as medicine_router
 
 BASE_DIR = Path(__file__).parent
@@ -68,6 +69,7 @@ exception_handler.init_app(app)
 app.include_router(auth_router)
 app.include_router(doctor_router)
 app.include_router(patient_router)
+app.include_router(pharmacist_router)
 app.include_router(medicine_router)
 
 # このアプリケーションのログ設定

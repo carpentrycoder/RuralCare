@@ -62,6 +62,42 @@ class Patient(Base):
 
 
 # -------------------------
+# Pharmacy Table
+# -------------------------
+
+class Pharmacy(Base):
+    __tablename__ = "pharmacies"
+
+    id               = Column(Integer, primary_key=True, index=True)
+    user_id          = Column(Integer, ForeignKey("users.id"), nullable=True)
+    pharmacist_name  = Column(String, nullable=False)
+    store_name       = Column(String, nullable=False)
+    degree           = Column(String, default="")
+    license_number   = Column(String, default="")
+    phone            = Column(String, default="")
+    email            = Column(String, default="")
+    address          = Column(String, default="")
+    city             = Column(String, default="")
+    state            = Column(String, default="")
+    pincode          = Column(String, default="")
+    opening_hours    = Column(String, default="")
+    verified         = Column(Boolean, default=False)
+
+
+# -------------------------
+# Pharmacy Inventory Table
+# -------------------------
+
+class PharmacyInventory(Base):
+    __tablename__ = "pharmacy_inventory"
+
+    id                 = Column(Integer, primary_key=True, index=True)
+    pharmacy_id        = Column(Integer, ForeignKey("pharmacies.id"), nullable=False)
+    medicine_id        = Column(Integer, ForeignKey("medicines.id"), nullable=False)
+    quantity_available = Column(Integer, default=0)
+
+
+# -------------------------
 # Medicine Table
 # -------------------------
 

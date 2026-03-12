@@ -10,6 +10,7 @@ with engine.connect() as conn:
     conn.execute(text("DROP TABLE IF EXISTS patients CASCADE"))
     conn.execute(text("DROP TABLE IF EXISTS doctors  CASCADE"))
     conn.execute(text("DROP TABLE IF EXISTS pharmacy CASCADE"))
+    conn.execute(text("DROP TABLE IF EXISTS pharmacies CASCADE"))
     conn.execute(text("DROP TABLE IF EXISTS users    CASCADE"))
     conn.execute(text("DROP TABLE IF EXISTS medicines CASCADE"))
     conn.commit()

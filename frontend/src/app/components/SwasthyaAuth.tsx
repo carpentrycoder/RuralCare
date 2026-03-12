@@ -82,7 +82,10 @@ export default function SwasthyaAuth({ onClose }: SwasthyaAuthProps = {}) {
     phone: "", qualification: "", specialty: "",
     experience: "", fee: "", hospital: "", city: "", state: "",
   });
-  const [pharmacyP, setPharmacyP] = useState({ phone: "", store_name: "", city: "", state: "" });
+  const [pharmacyP, setPharmacyP] = useState({
+    phone: "", store_name: "", degree: "", license_number: "",
+    address: "", city: "", state: "", pincode: "", opening_hours: "",
+  });
 
   const [error,   setError]   = useState("");
   const [success, setSuccess] = useState("");
@@ -96,7 +99,7 @@ export default function SwasthyaAuth({ onClose }: SwasthyaAuthProps = {}) {
     setCreds({ name: "", email: "", password: "" });
     setPatientP({ age: "", gender: "", phone: "", blood_group: "", height: "", weight: "" });
     setDoctorP({ phone: "", qualification: "", specialty: "", experience: "", fee: "", hospital: "", city: "", state: "" });
-    setPharmacyP({ phone: "", store_name: "", city: "", state: "" });
+    setPharmacyP({ phone: "", store_name: "", degree: "", license_number: "", address: "", city: "", state: "", pincode: "", opening_hours: "" });
     setError(""); setSuccess("");
   };
 
@@ -171,11 +174,29 @@ export default function SwasthyaAuth({ onClose }: SwasthyaAuthProps = {}) {
             phone:         doctorP.phone,
           }),
         });
+      } else if (selectedRole === "pharmacy") {
+        await fetch("/pharmacies/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id:         authData.id,
+            pharmacist_name: creds.name,
+            store_name:      pharmacyP.store_name,
+            degree:          pharmacyP.degree,
+            license_number:  pharmacyP.license_number,
+            phone:           pharmacyP.phone,
+            email:           creds.email,
+            address:         pharmacyP.address,
+            city:            pharmacyP.city,
+            state:           pharmacyP.state,
+            pincode:         pharmacyP.pincode,
+            opening_hours:   pharmacyP.opening_hours,
+          }),
+        });
       }
-      // pharmacy: no separate profile table – user row + role is sufficient
 
       setSuccess(`Account created! Welcome, ${authData.name} 🎉`);
-      login({ name: authData.name, email: authData.email, phone: "", role: selectedRole, userId: authData.id });
+      login({ name: authData.name, email: authData.email, phone: selectedRole === "pharmacy" ? pharmacyP.phone : "", role: selectedRole, userId: authData.id });
       setTimeout(() => onClose?.(), 1400);
     } catch { setError("Could not reach the server. Is the backend running?"); }
     finally   { setLoading(false); }
@@ -339,11 +360,20 @@ export default function SwasthyaAuth({ onClose }: SwasthyaAuthProps = {}) {
           {/* ── Pharmacy fields ── */}
           {selectedRole === "pharmacy" && (
             <>
-              <Field label="Phone Number" type="tel"  value={pharmacyP.phone}      onChange={(v) => setPharmacyP({ ...pharmacyP, phone: v })}      placeholder="+91 9876543210" />
-              <Field label="Store / Shop Name" type="text" value={pharmacyP.store_name} onChange={(v) => setPharmacyP({ ...pharmacyP, store_name: v })} placeholder="Sharma Medical Store" />
+              <Field label="Phone Number" type="tel"  value={pharmacyP.phone}      onChange={(v) => setPharmacyP({ ...pharmacyP, phone: v })}      placeholder="+91 9876543210" required />
+              <Field label="Store / Shop Name" type="text" value={pharmacyP.store_name} onChange={(v) => setPharmacyP({ ...pharmacyP, store_name: v })} placeholder="Sharma Medical Store" required />
               <div className="grid grid-cols-2 gap-3">
-                <Field label="City"  type="text" value={pharmacyP.city}  onChange={(v) => setPharmacyP({ ...pharmacyP, city: v })}  placeholder="Mumbai" />
-                <Field label="State" type="text" value={pharmacyP.state} onChange={(v) => setPharmacyP({ ...pharmacyP, state: v })} placeholder="Maharashtra" />
+                <Field label="Degree / Qualification" type="text" value={pharmacyP.degree} onChange={(v) => setPharmacyP({ ...pharmacyP, degree: v })} placeholder="D.Pharm / B.Pharm" required />
+                <Field label="License Number" type="text" value={pharmacyP.license_number} onChange={(v) => setPharmacyP({ ...pharmacyP, license_number: v })} placeholder="PH-2026-001" required />
+              </div>
+              <Field label="Store Address" type="text" value={pharmacyP.address} onChange={(v) => setPharmacyP({ ...pharmacyP, address: v })} placeholder="Main Market Road, Near Bus Stand" required />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="City"  type="text" value={pharmacyP.city}  onChange={(v) => setPharmacyP({ ...pharmacyP, city: v })}  placeholder="Mumbai" required />
+                <Field label="State" type="text" value={pharmacyP.state} onChange={(v) => setPharmacyP({ ...pharmacyP, state: v })} placeholder="Maharashtra" required />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Pincode" type="text" value={pharmacyP.pincode} onChange={(v) => setPharmacyP({ ...pharmacyP, pincode: v })} placeholder="400001" />
+                <Field label="Opening Hours" type="text" value={pharmacyP.opening_hours} onChange={(v) => setPharmacyP({ ...pharmacyP, opening_hours: v })} placeholder="8 AM - 10 PM" />
               </div>
               <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-[10px] text-[0.8rem] text-amber-800 font-sans">
                 ℹ️ After sign-up you'll manage your medicine inventory from the Pharmacy Admin dashboard.

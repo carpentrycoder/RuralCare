@@ -18,6 +18,25 @@ const ICE_SERVERS = [
 
 type CallStatus = "connecting" | "waiting" | "connected" | "failed" | "ended";
 
+interface Doctor {
+  id: number;
+  name: string;
+  qualification: string;
+  specialty: string;
+  experience: number;
+  fee: number;
+  hospital: string;
+  city: string;
+  state: string;
+  phone: string;
+  email: string;
+  availability: string;   // "Available" | "Busy" | "On Leave"
+  consult_mode: string;   // "Video" | "In-Person" | "Both"
+  verified: boolean;
+  certificate: string | null;
+}
+
+
 // ── VideoCallRoom Component ───────────────────────────────────────────────────
 
 function VideoCallRoom({
@@ -292,54 +311,31 @@ function VideoCallRoom({
 
 export function TalkToDoctor() {
   const navigate = useNavigate();
-  const [selectedDoctor, setSelectedDoctor]   = useState<number | null>(null);
+  const [selectedDoctor, setSelectedDoctor]     = useState<number | null>(null);
   const [consultationType, setConsultationType] = useState<"video" | "audio" | null>(null);
 
-  const doctors = [
-    {
-      id: 1,
-      name: "Dr. Priya Sharma",
-      specialty: "General Physician",
-      experience: "12 years",
-      available: true,
-      nextSlot: "Today, 2:00 PM",
-      fee: "₹200",
-    },
-    {
-      id: 2,
-      name: "Dr. Rajesh Kumar",
-      specialty: "Pediatrician",
-      experience: "8 years",
-      available: true,
-      nextSlot: "Today, 3:30 PM",
-      fee: "₹250",
-    },
-    {
-      id: 3,
-      name: "Dr. Anita Desai",
-      specialty: "Gynecologist",
-      experience: "15 years",
-      available: false,
-      nextSlot: "Tomorrow, 10:00 AM",
-      fee: "₹300",
-    },
-    {
-      id: 4,
-      name: "Dr. Vikram Singh",
-      specialty: "Dermatologist",
-      experience: "10 years",
-      available: true,
-      nextSlot: "Today, 4:00 PM",
-      fee: "₹250",
-    },
-  ];
+  const [doctors,     setDoctors]     = useState<Doctor[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(true);
+  const [fetchError,  setFetchError]  = useState("");
+
+  useEffect(() => {
+    fetch("/doctors/")
+      .then((res) => {
+        if (!res.ok) throw new Error(`Server error ${res.status}`);
+        return res.json() as Promise<Doctor[]>;
+      })
+      .then((data) => setDoctors(data))
+      .catch((err) => setFetchError(err.message ?? "Failed to load doctors"))
+      .finally(() => setLoadingDocs(false));
+  }, []);
 
   const handleBookAudio = () => {
     if (!selectedDoctor) return;
-    const doctor = doctors.find(d => d.id === selectedDoctor);
+    const doctor = doctors.find((d) => d.id === selectedDoctor);
     if (!doctor) return;
     alert(`Audio consultation booking for ${doctor.name} — audio-only calls coming soon.`);
   };
+
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] py-8 md:py-12">
@@ -443,61 +439,103 @@ export function TalkToDoctor() {
             {consultationType === "audio" ? "Select a Doctor for Audio Consultation" : "Available Doctors"}
           </h2>
 
-          <div className="grid gap-4">
-            {doctors.map((doctor) => (
-              <button
-                key={doctor.id}
-                onClick={() => setSelectedDoctor(doctor.id)}
-                className={`p-6 rounded-2xl border-2 transition-all text-left ${
-                  selectedDoctor === doctor.id
-                    ? "border-[#4F7DF3] bg-[#4F7DF3]/5"
-                    : "border-gray-200 hover:border-[#4F7DF3]/50"
-                }`}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div className="w-16 h-16 rounded-full bg-[#4F7DF3]/10 flex items-center justify-center flex-shrink-0">
-                    <User className="w-8 h-8 text-[#4F7DF3]" />
-                  </div>
+          {/* Loading */}
+          {loadingDocs && (
+            <div className="flex items-center justify-center py-12 gap-3 text-[#64748B]">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Loading doctors…</span>
+            </div>
+          )}
 
-                  <div className="flex-1">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
-                      <div>
-                        <h3 className="text-lg text-[#1E293B]" style={{ fontWeight: 600 }}>
-                          {doctor.name}
-                        </h3>
-                        <p className="text-[#64748B]">{doctor.specialty}</p>
+          {/* Error */}
+          {!loadingDocs && fetchError && (
+            <div className="py-6 px-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm text-center">
+              {fetchError}
+            </div>
+          )}
+
+          {/* Empty */}
+          {!loadingDocs && !fetchError && doctors.length === 0 && (
+            <div className="py-12 text-center text-[#64748B]">
+              No doctors are registered yet.
+            </div>
+          )}
+
+          {/* Doctor cards */}
+          {!loadingDocs && !fetchError && doctors.length > 0 && (
+            <div className="grid gap-4">
+              {doctors.map((doctor) => {
+                const isAvailable = doctor.availability === "Available";
+                return (
+                  <button
+                    key={doctor.id}
+                    onClick={() => setSelectedDoctor(doctor.id)}
+                    className={`p-6 rounded-2xl border-2 transition-all text-left ${
+                      selectedDoctor === doctor.id
+                        ? "border-[#4F7DF3] bg-[#4F7DF3]/5"
+                        : "border-gray-200 hover:border-[#4F7DF3]/50"
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                      <div className="w-16 h-16 rounded-full bg-[#4F7DF3]/10 flex items-center justify-center flex-shrink-0">
+                        <User className="w-8 h-8 text-[#4F7DF3]" />
                       </div>
-                      <div className="flex items-center gap-2">
-                        {doctor.available ? (
-                          <span className="px-3 py-1 bg-[#A7E3C9] text-[#1E293B] rounded-full text-sm">
-                            Available
-                          </span>
-                        ) : (
-                          <span className="px-3 py-1 bg-gray-200 text-[#64748B] rounded-full text-sm">
-                            Busy
-                          </span>
-                        )}
+
+                      <div className="flex-1">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                          <div>
+                            <h3 className="text-lg text-[#1E293B]" style={{ fontWeight: 600 }}>
+                              {doctor.name}
+                            </h3>
+                            <p className="text-[#64748B]">
+                              {doctor.specialty}
+                              {doctor.qualification ? ` · ${doctor.qualification}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isAvailable ? (
+                              <span className="px-3 py-1 bg-[#A7E3C9] text-[#1E293B] rounded-full text-sm">
+                                Available
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 bg-gray-200 text-[#64748B] rounded-full text-sm">
+                                {doctor.availability}
+                              </span>
+                            )}
+                            {doctor.verified && (
+                              <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-semibold">
+                                ✓ Verified
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-4 text-sm text-[#64748B]">
+                          {doctor.experience > 0 && (
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-4 h-4" />
+                              <span>{doctor.experience} yr{doctor.experience !== 1 ? "s" : ""} experience</span>
+                            </div>
+                          )}
+                          {doctor.hospital && (
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-4 h-4" />
+                              <span>{doctor.hospital}{doctor.city ? `, ${doctor.city}` : ""}</span>
+                            </div>
+                          )}
+                          {Number(doctor.fee) > 0 && (
+                            <div className="flex items-center gap-1">
+                              <span style={{ fontWeight: 600 }}>Fee: ₹{doctor.fee}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-
-                    <div className="flex flex-wrap gap-4 text-sm text-[#64748B]">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        <span>{doctor.experience} experience</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        <span>Next: {doctor.nextSlot}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span style={{ fontWeight: 600 }}>Fee: {doctor.fee}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Book Audio Consultation Button */}

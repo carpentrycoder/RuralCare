@@ -1,10 +1,11 @@
-import { useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import {
   Plus, Search, Edit2, Trash2, X, Check, Package,
   AlertTriangle, TrendingUp, ChevronDown, Filter, Download,
   Pill, Stethoscope, FlaskConical, HeartPulse, ShieldPlus,
   RefreshCw, ArrowUpDown,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 type Category = "Diabetes" | "Cholesterol" | "Blood Pressure" | "Antibiotic" | "Pain Relief" | "Supplement" | "Cardiac" | "Thyroid" | "Antacid" | "Other";
 type StockStatus = "In Stock" | "Low Stock" | "Out of Stock";
@@ -18,10 +19,27 @@ interface Medicine {
   form: string;
   price: number;
   stock: number;
-  minStock: number;
+  min_stock: number;
   manufacturer: string;
   expiry: string;
-  prescription: boolean;
+  prescription_required: boolean;
+}
+
+interface PharmacyProfile {
+  id?: number;
+  user_id?: number;
+  pharmacist_name: string;
+  store_name: string;
+  degree: string;
+  license_number: string;
+  phone: string;
+  email: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  opening_hours: string;
+  verified: boolean;
 }
 
 const CATEGORIES: Category[] = [
@@ -29,7 +47,7 @@ const CATEGORIES: Category[] = [
   "Pain Relief", "Supplement", "Cardiac", "Thyroid", "Antacid", "Other",
 ];
 
-const FORMS = ["Tablet", "Capsule", "Syrup", "Injection", "Drops", "Cream", "Inhaler", "Powder"];
+const FORMS = ["Tablet", "Capsule", "Syrup", "Injection", "Drops", "Cream", "Gel", "Lotion", "Ointment", "Suspension", "Solution", "Inhaler", "Powder", "Soap", "Granules", "Other"];
 
 const categoryIcons: Record<Category, React.ReactNode> = {
   Diabetes: <Stethoscope className="w-3.5 h-3.5" />,
@@ -57,18 +75,9 @@ const categoryColors: Record<Category, string> = {
   Other: "bg-slate-50 text-slate-600",
 };
 
-const SEED_MEDICINES: Medicine[] = [
-  { id: 1, name: "Metformin", brand: "Glyciphage", category: "Diabetes", dose: "500mg", form: "Tablet", price: 48, stock: 240, minStock: 50, manufacturer: "Franco-Indian", expiry: "2027-06", prescription: true },
-  { id: 2, name: "Atorvastatin", brand: "Atorva", category: "Cholesterol", dose: "20mg", form: "Tablet", price: 85, stock: 18, minStock: 40, manufacturer: "Zydus", expiry: "2026-12", prescription: true },
-  { id: 3, name: "Telmisartan", brand: "Telma", category: "Blood Pressure", dose: "40mg", form: "Tablet", price: 112, stock: 0, minStock: 30, manufacturer: "Glenmark", expiry: "2027-03", prescription: true },
-  { id: 4, name: "Vitamin D3", brand: "Calcirol", category: "Supplement", dose: "60,000 IU", form: "Capsule", price: 65, stock: 90, minStock: 20, manufacturer: "Cadila", expiry: "2027-09", prescription: false },
-  { id: 5, name: "Amoxicillin", brand: "Mox", category: "Antibiotic", dose: "500mg", form: "Capsule", price: 95, stock: 55, minStock: 30, manufacturer: "Ranbaxy", expiry: "2026-11", prescription: true },
-  { id: 6, name: "Paracetamol", brand: "Calpol", category: "Pain Relief", dose: "650mg", form: "Tablet", price: 28, stock: 500, minStock: 100, manufacturer: "GSK", expiry: "2027-12", prescription: false },
-];
-
 const emptyForm = (): Omit<Medicine, "id"> => ({
   name: "", brand: "", category: "Other", dose: "", form: "Tablet",
-  price: 0, stock: 0, minStock: 20, manufacturer: "", expiry: "", prescription: false,
+  price: 0, stock: 0, min_stock: 20, manufacturer: "", expiry: "", prescription_required: false,
 });
 
 function getStockStatus(stock: number, min: number): StockStatus {
@@ -96,20 +105,181 @@ function StatCard({ label, value, sub, color, icon }: { label: string; value: st
   );
 }
 
-interface FormModalProps {
-  initial: Omit<Medicine, "id">;
-  editingId: number | null;
-  onSave: (data: Omit<Medicine, "id">) => void;
+function emptyPharmacyProfile(userId?: number, name = "", email = ""): PharmacyProfile {
+  return {
+    user_id: userId,
+    pharmacist_name: name,
+    store_name: "",
+    degree: "",
+    license_number: "",
+    phone: "",
+    email,
+    address: "",
+    city: "",
+    state: "",
+    pincode: "",
+    opening_hours: "",
+    verified: false,
+  };
+}
+
+interface PharmacyProfileModalProps {
+  initial: PharmacyProfile;
+  onSave: (profile: PharmacyProfile) => void;
   onClose: () => void;
 }
 
-function FormModal({ initial, editingId, onSave, onClose }: FormModalProps) {
+function PharmacyProfileModal({ initial, onSave, onClose }: PharmacyProfileModalProps) {
   const [form, setForm] = useState(initial);
+  const set = (key: keyof PharmacyProfile, value: unknown) => setForm((prev) => ({ ...prev, [key]: value }));
+  const fieldClass = "w-full px-3.5 py-2.5 border border-[rgba(0,0,0,0.1)] rounded-xl text-sm text-[#1E293B] bg-white outline-none transition focus:border-[#4F7DF3] focus:ring-2 focus:ring-[#4F7DF3]/20 placeholder:text-[#94A3B8]";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white px-6 pt-6 pb-4 border-b border-[rgba(0,0,0,0.06)] rounded-t-3xl z-10 flex items-center justify-between">
+          <div>
+            <div className="text-xs font-semibold tracking-widest uppercase text-[#94A3B8] mb-1">Pharmacist Profile</div>
+            <h2 className="text-xl font-bold text-[#1E293B]">Edit Store Details</h2>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-[#F8FAFC] text-[#64748B] transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="px-6 py-5 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Pharmacist Name *</label>
+              <input required value={form.pharmacist_name} onChange={(e) => set("pharmacist_name", e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Store Name *</label>
+              <input required value={form.store_name} onChange={(e) => set("store_name", e.target.value)} className={fieldClass} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Phone</label>
+              <input value={form.phone} onChange={(e) => set("phone", e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Email</label>
+              <input value={form.email} onChange={(e) => set("email", e.target.value)} className={fieldClass} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Degree</label>
+              <input value={form.degree} onChange={(e) => set("degree", e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">License Number</label>
+              <input value={form.license_number} onChange={(e) => set("license_number", e.target.value)} className={fieldClass} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Address</label>
+            <input value={form.address} onChange={(e) => set("address", e.target.value)} className={fieldClass} />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">City</label>
+              <input value={form.city} onChange={(e) => set("city", e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">State</label>
+              <input value={form.state} onChange={(e) => set("state", e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Pincode</label>
+              <input value={form.pincode} onChange={(e) => set("pincode", e.target.value)} className={fieldClass} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Opening Hours</label>
+            <input value={form.opening_hours} onChange={(e) => set("opening_hours", e.target.value)} className={fieldClass} placeholder="8 AM - 10 PM" />
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-full border border-[rgba(0,0,0,0.1)] text-[#64748B] hover:bg-[#F8FAFC] transition-colors text-sm font-semibold">
+              Cancel
+            </button>
+            <button type="submit" className="flex-1 py-2.5 rounded-full bg-[#4F7DF3] hover:bg-[#3D6DE3] text-white text-sm font-bold transition-colors shadow-[0_2px_10px_rgba(79,125,243,0.3)]">
+              Save Store Profile
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+interface AddStockModalProps {
+  onSave: (payload: { mode: "existing"; medicine: Medicine; quantity: number } | { mode: "new"; medicine: Omit<Medicine, "id">; quantity: number }) => void;
+  onClose: () => void;
+}
+
+function AddStockModal({ onSave, onClose }: AddStockModalProps) {
+  const [query, setQuery] = useState("");
+  const [quantity, setQuantity] = useState(0);
+  const [createNew, setCreateNew] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [form, setForm] = useState(emptyForm());
+  const [suggestions, setSuggestions] = useState<Medicine[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionCategory, setSuggestionCategory] = useState<"All" | Category>("All");
+  const [suggestionStatus, setSuggestionStatus] = useState<"All" | StockStatus>("All");
   const set = (k: keyof typeof form, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSuggestions = async () => {
+      if (!query.trim()) {
+        setSuggestions([]);
+        return;
+      }
+
+      setSuggestionsLoading(true);
+      try {
+        const params = new URLSearchParams({ q: query.trim(), limit: "8" });
+        if (suggestionCategory !== "All") params.set("category", suggestionCategory);
+        if (suggestionStatus !== "All") params.set("status", suggestionStatus);
+        const response = await fetch(`/medicines/?${params.toString()}`);
+        if (!response.ok) throw new Error("Failed to search medicines");
+        const data: Medicine[] = await response.json();
+        if (!cancelled) setSuggestions(data);
+      } catch {
+        if (!cancelled) setSuggestions([]);
+      } finally {
+        if (!cancelled) setSuggestionsLoading(false);
+      }
+    };
+
+    const timeout = window.setTimeout(loadSuggestions, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [query, suggestionCategory, suggestionStatus]);
+
+  const selectedMedicine = selectedId === null ? null : suggestions.find((medicine) => medicine.id === selectedId) ?? null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(form);
+    if (quantity <= 0) return;
+    if (createNew) {
+      onSave({ mode: "new", medicine: { ...form, stock: quantity }, quantity });
+      return;
+    }
+    if (!selectedMedicine) return;
+    onSave({ mode: "existing", medicine: selectedMedicine, quantity });
   };
 
   const fieldClass = "w-full px-3.5 py-2.5 border border-[rgba(0,0,0,0.1)] rounded-xl text-sm text-[#1E293B] bg-white outline-none transition focus:border-[#4F7DF3] focus:ring-2 focus:ring-[#4F7DF3]/20 placeholder:text-[#94A3B8]";
@@ -123,7 +293,7 @@ function FormModal({ initial, editingId, onSave, onClose }: FormModalProps) {
             <div>
               <div className="text-xs font-semibold tracking-widest uppercase text-[#94A3B8] mb-1">Pharma Admin</div>
               <h2 className="text-xl font-bold text-[#1E293B]">
-                {editingId ? "Edit Medicine" : "Add New Medicine"}
+                Add Medicine Stock
               </h2>
             </div>
             <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-[#F8FAFC] text-[#64748B] transition-colors">
@@ -133,19 +303,209 @@ function FormModal({ initial, editingId, onSave, onClose }: FormModalProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
-          {/* Row 1 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Search Existing Medicine</label>
+            <input
+              value={query}
+              onChange={e => {
+                setQuery(e.target.value);
+                setCreateNew(false);
+                setSelectedId(null);
+              }}
+              placeholder="Type medicine name or brand..."
+              className={fieldClass}
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+              <div>
+                <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Filter by Category</label>
+                <select value={suggestionCategory} onChange={e => setSuggestionCategory(e.target.value as "All" | Category)} className={fieldClass}>
+                  <option value="All">All Categories</option>
+                  {CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Likely in DB</label>
+                <select value={suggestionStatus} onChange={e => setSuggestionStatus(e.target.value as "All" | StockStatus)} className={fieldClass}>
+                  <option value="All">All Results</option>
+                  <option value="In Stock">In Stock</option>
+                  <option value="Low Stock">Low Stock</option>
+                  <option value="Out of Stock">Out of Stock</option>
+                </select>
+              </div>
+            </div>
+            {!createNew && query && suggestionsLoading && (
+              <div className="mt-2 px-4 py-3 rounded-2xl bg-[#F8FAFC] border border-[rgba(0,0,0,0.08)] text-sm text-[#64748B]">
+                Searching medicines in database...
+              </div>
+            )}
+            {!createNew && query && suggestions.length > 0 && (
+              <div className="mt-2 border border-[rgba(0,0,0,0.08)] rounded-2xl overflow-hidden bg-white">
+                {suggestions.map((medicine) => (
+                  <button
+                    key={medicine.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedId(medicine.id);
+                      setQuery(medicine.name);
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-[#F8FAFC] border-b border-[rgba(0,0,0,0.04)] last:border-b-0"
+                  >
+                    <div className="font-semibold text-sm text-[#1E293B]">{medicine.name}</div>
+                    <div className="text-xs text-[#94A3B8]">{medicine.brand} · {medicine.category} · current stock {medicine.stock}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {!createNew && query && !suggestionsLoading && suggestions.length === 0 && (
+              <div className="mt-2 p-4 rounded-2xl bg-amber-50 border border-amber-200">
+                <div className="text-sm text-amber-800 mb-2">No matching medicine found in the catalog.</div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreateNew(true);
+                    setForm((prev) => ({ ...prev, name: query || prev.name, brand: query || prev.brand }));
+                  }}
+                  className="px-4 py-2 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold"
+                >
+                  Create New Medicine
+                </button>
+              </div>
+            )}
+          </div>
+
+          {selectedMedicine && !createNew && (
+            <div className="p-4 bg-[#F8FAFC] rounded-2xl border border-[rgba(0,0,0,0.06)]">
+              <div className="text-sm font-semibold text-[#1E293B]">Selected: {selectedMedicine.name}</div>
+              <div className="text-xs text-[#64748B] mt-1">{selectedMedicine.brand} · {selectedMedicine.dose || "No dose"} · {selectedMedicine.form}</div>
+              <div className="text-xs text-[#64748B] mt-1">Current stock: {selectedMedicine.stock}</div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Medicine Name *</label>
-              <input required value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Metformin" className={fieldClass} />
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Quantity to Add *</label>
+              <input required type="number" min={1} value={quantity || ""} onChange={e => setQuantity(Number(e.target.value))} placeholder="0" className={fieldClass} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Brand Name *</label>
-              <input required value={form.brand} onChange={e => set("brand", e.target.value)} placeholder="e.g. Glyciphage" className={fieldClass} />
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Min Stock Alert</label>
+              <input type="number" min={0} value={form.min_stock || ""} onChange={e => set("min_stock", Number(e.target.value))} placeholder="20" className={fieldClass} disabled={!createNew} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Price (₹)</label>
+              <input type="number" min={0} value={form.price || ""} onChange={e => set("price", Number(e.target.value))} placeholder="0.00" className={fieldClass} disabled={!createNew} />
             </div>
           </div>
 
-          {/* Row 2 */}
+          {createNew && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Medicine Name *</label>
+                  <input required value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Metformin" className={fieldClass} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Brand Name *</label>
+                  <input required value={form.brand} onChange={e => set("brand", e.target.value)} placeholder="e.g. Glyciphage" className={fieldClass} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Category *</label>
+                  <select required value={form.category} onChange={e => set("category", e.target.value as Category)} className={fieldClass}>
+                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Dosage</label>
+                  <input value={form.dose} onChange={e => set("dose", e.target.value)} placeholder="e.g. 500mg" className={fieldClass} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Form *</label>
+                  <select required value={form.form} onChange={e => set("form", e.target.value)} className={fieldClass}>
+                    {FORMS.map(f => <option key={f}>{f}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Manufacturer</label>
+                  <input value={form.manufacturer} onChange={e => set("manufacturer", e.target.value)} placeholder="e.g. Sun Pharma" className={fieldClass} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Expiry Date</label>
+                  <input type="month" value={form.expiry} onChange={e => set("expiry", e.target.value)} className={fieldClass} />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-4 bg-[#F8FAFC] rounded-xl border border-[rgba(0,0,0,0.06)]">
+                <button
+                  type="button"
+                  onClick={() => set("prescription_required", !form.prescription_required)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${form.prescription_required ? "bg-[#4F7DF3]" : "bg-[#CBD5E1]"}`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.prescription_required ? "translate-x-5" : "translate-x-0.5"}`} />
+                </button>
+                <div>
+                  <div className="text-sm font-semibold text-[#1E293B]">Prescription Required</div>
+                  <div className="text-xs text-[#94A3B8]">Enable this if a prescription is needed.</div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-full border border-[rgba(0,0,0,0.1)] text-[#64748B] hover:bg-[#F8FAFC] transition-colors text-sm font-semibold">
+              Cancel
+            </button>
+            <button type="submit" className="flex-1 py-2.5 rounded-full bg-[#4F7DF3] hover:bg-[#3D6DE3] text-white text-sm font-bold transition-colors shadow-[0_2px_10px_rgba(79,125,243,0.3)]">
+              {createNew ? "Create Medicine & Add Stock" : "Add Stock"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+interface EditModalProps {
+  initial: Medicine;
+  onSave: (data: Medicine) => void;
+  onClose: () => void;
+}
+
+function EditModal({ initial, onSave, onClose }: EditModalProps) {
+  const [form, setForm] = useState(initial);
+  const set = (k: keyof Medicine, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
+  const fieldClass = "w-full px-3.5 py-2.5 border border-[rgba(0,0,0,0.1)] rounded-xl text-sm text-[#1E293B] bg-white outline-none transition focus:border-[#4F7DF3] focus:ring-2 focus:ring-[#4F7DF3]/20 placeholder:text-[#94A3B8]";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white px-6 pt-6 pb-4 border-b border-[rgba(0,0,0,0.06)] rounded-t-3xl z-10 flex items-center justify-between">
+          <div>
+            <div className="text-xs font-semibold tracking-widest uppercase text-[#94A3B8] mb-1">Pharma Admin</div>
+            <h2 className="text-xl font-bold text-[#1E293B]">Edit Medicine</h2>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-[#F8FAFC] text-[#64748B] transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="px-6 py-5 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Medicine Name *</label>
+              <input required value={form.name} onChange={e => set("name", e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Brand Name *</label>
+              <input required value={form.brand} onChange={e => set("brand", e.target.value)} className={fieldClass} />
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Category *</label>
@@ -154,8 +514,8 @@ function FormModal({ initial, editingId, onSave, onClose }: FormModalProps) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Dosage *</label>
-              <input required value={form.dose} onChange={e => set("dose", e.target.value)} placeholder="e.g. 500mg" className={fieldClass} />
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Dosage</label>
+              <input value={form.dose} onChange={e => set("dose", e.target.value)} className={fieldClass} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Form *</label>
@@ -165,56 +525,52 @@ function FormModal({ initial, editingId, onSave, onClose }: FormModalProps) {
             </div>
           </div>
 
-          {/* Row 3 */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Price (₹) *</label>
-              <input required type="number" min={0} value={form.price || ""} onChange={e => set("price", Number(e.target.value))} placeholder="0.00" className={fieldClass} />
+              <input required type="number" min={0} value={form.price || ""} onChange={e => set("price", Number(e.target.value))} className={fieldClass} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Current Stock *</label>
-              <input required type="number" min={0} value={form.stock || ""} onChange={e => set("stock", Number(e.target.value))} placeholder="0" className={fieldClass} />
+              <input required type="number" min={0} value={form.stock || ""} onChange={e => set("stock", Number(e.target.value))} className={fieldClass} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Min Stock Alert</label>
-              <input type="number" min={0} value={form.minStock || ""} onChange={e => set("minStock", Number(e.target.value))} placeholder="20" className={fieldClass} />
+              <input type="number" min={0} value={form.min_stock || ""} onChange={e => set("min_stock", Number(e.target.value))} className={fieldClass} />
             </div>
           </div>
 
-          {/* Row 4 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Manufacturer *</label>
-              <input required value={form.manufacturer} onChange={e => set("manufacturer", e.target.value)} placeholder="e.g. Sun Pharma" className={fieldClass} />
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Manufacturer</label>
+              <input value={form.manufacturer} onChange={e => set("manufacturer", e.target.value)} className={fieldClass} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Expiry Date *</label>
-              <input required type="month" value={form.expiry} onChange={e => set("expiry", e.target.value)} className={fieldClass} />
+              <label className="block text-xs font-semibold text-[#1E293B] mb-1.5">Expiry Date</label>
+              <input type="month" value={form.expiry} onChange={e => set("expiry", e.target.value)} className={fieldClass} />
             </div>
           </div>
 
-          {/* Prescription Toggle */}
           <div className="flex items-center gap-3 p-4 bg-[#F8FAFC] rounded-xl border border-[rgba(0,0,0,0.06)]">
             <button
               type="button"
-              onClick={() => set("prescription", !form.prescription)}
-              className={`relative w-11 h-6 rounded-full transition-colors ${form.prescription ? "bg-[#4F7DF3]" : "bg-[#CBD5E1]"}`}
+              onClick={() => set("prescription_required", !form.prescription_required)}
+              className={`relative w-11 h-6 rounded-full transition-colors ${form.prescription_required ? "bg-[#4F7DF3]" : "bg-[#CBD5E1]"}`}
             >
-              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.prescription ? "translate-x-5" : "translate-x-0.5"}`} />
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.prescription_required ? "translate-x-5" : "translate-x-0.5"}`} />
             </button>
             <div>
               <div className="text-sm font-semibold text-[#1E293B]">Prescription Required</div>
-              <div className="text-xs text-[#94A3B8]">Toggle if this medicine requires a doctor's prescription</div>
+              <div className="text-xs text-[#94A3B8]">Toggle if this medicine requires a prescription.</div>
             </div>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-full border border-[rgba(0,0,0,0.1)] text-[#64748B] hover:bg-[#F8FAFC] transition-colors text-sm font-semibold">
               Cancel
             </button>
             <button type="submit" className="flex-1 py-2.5 rounded-full bg-[#4F7DF3] hover:bg-[#3D6DE3] text-white text-sm font-bold transition-colors shadow-[0_2px_10px_rgba(79,125,243,0.3)]">
-              {editingId ? "Save Changes" : "Add Medicine"}
+              Save Changes
             </button>
           </div>
         </form>
@@ -224,52 +580,163 @@ function FormModal({ initial, editingId, onSave, onClose }: FormModalProps) {
 }
 
 export function PharmaAdmin() {
-  const [medicines, setMedicines] = useState<Medicine[]>(SEED_MEDICINES);
+  const { user } = useAuth();
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [pharmacyProfile, setPharmacyProfile] = useState<PharmacyProfile | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<"All" | Category>("All");
   const [filterStatus, setFilterStatus] = useState<"All" | StockStatus>("All");
   const [sortField, setSortField] = useState<keyof Medicine>("name");
   const [sortAsc, setSortAsc] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [formInitial, setFormInitial] = useState(emptyForm());
+  const [addOpen, setAddOpen] = useState(false);
+  const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
-  const nextId = useRef(SEED_MEDICINES.length + 1);
+  const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadPharmacyProfile = async () => {
+    if (!user.userId) {
+      setPharmacyProfile(emptyPharmacyProfile(undefined, user.name, user.email));
+      setProfileLoading(false);
+      return;
+    }
+
+    setProfileLoading(true);
+    try {
+      const response = await fetch(`/pharmacies/?user_id=${user.userId}`);
+      if (!response.ok) throw new Error("Failed to load pharmacy profile");
+      const data: PharmacyProfile[] = await response.json();
+      setPharmacyProfile(data[0] ?? emptyPharmacyProfile(user.userId, user.name, user.email));
+    } catch {
+      setPharmacyProfile(emptyPharmacyProfile(user.userId, user.name, user.email));
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const loadMedicines = async (options?: { search?: string; category?: "All" | Category; status?: "All" | StockStatus }) => {
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ limit: "500" });
+      const nextSearch = options?.search ?? search;
+      const nextCategory = options?.category ?? filterCategory;
+      const nextStatus = options?.status ?? filterStatus;
+
+      if (nextSearch.trim()) params.set("q", nextSearch.trim());
+      if (nextCategory !== "All") params.set("category", nextCategory);
+      if (nextStatus !== "All") params.set("status", nextStatus);
+
+      const response = await fetch(`/medicines/?${params.toString()}`);
+      if (!response.ok) throw new Error(`Failed to load medicines (${response.status})`);
+      const data = await response.json();
+      setMedicines(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load medicines");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      loadMedicines();
+    }, 180);
+
+    return () => window.clearTimeout(timeout);
+  }, [search, filterCategory, filterStatus]);
+
+  useEffect(() => {
+    loadPharmacyProfile();
+  }, [user.userId, user.name, user.email]);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  const openAdd = () => {
-    setFormInitial(emptyForm());
-    setEditingId(null);
-    setModalOpen(true);
-  };
-
-  const openEdit = (m: Medicine) => {
-    const { id, ...rest } = m;
-    setFormInitial(rest);
-    setEditingId(id);
-    setModalOpen(true);
-  };
-
-  const handleSave = (data: Omit<Medicine, "id">) => {
-    if (editingId !== null) {
-      setMedicines(p => p.map(m => m.id === editingId ? { ...data, id: editingId } : m));
-      showToast("Medicine updated successfully.");
-    } else {
-      setMedicines(p => [...p, { ...data, id: nextId.current++ }]);
-      showToast("Medicine added successfully.");
+  const handleAddStock = async (payload: { mode: "existing"; medicine: Medicine; quantity: number } | { mode: "new"; medicine: Omit<Medicine, "id">; quantity: number }) => {
+    try {
+      if (payload.mode === "existing") {
+        const response = await fetch(`/medicines/${payload.medicine.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload.medicine, stock: payload.medicine.stock + payload.quantity }),
+        });
+        if (!response.ok) throw new Error("Failed to update stock");
+        const updated = await response.json();
+        setMedicines(prev => prev.map(medicine => medicine.id === updated.id ? updated : medicine));
+        showToast("Stock added successfully.");
+      } else {
+        const response = await fetch("/medicines/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload.medicine, stock: payload.quantity }),
+        });
+        if (!response.ok) throw new Error("Failed to create medicine");
+        const created = await response.json();
+        setMedicines(prev => [created, ...prev]);
+        showToast("Medicine created and stock added.");
+      }
+      setAddOpen(false);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to save medicine", "error");
     }
-    setModalOpen(false);
   };
 
-  const handleDelete = (id: number) => {
-    setMedicines(p => p.filter(m => m.id !== id));
-    setDeleteConfirm(null);
-    showToast("Medicine removed.", "error");
+  const handleSaveEdit = async (medicine: Medicine) => {
+    try {
+      const response = await fetch(`/medicines/${medicine.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(medicine),
+      });
+      if (!response.ok) throw new Error("Failed to update medicine");
+      const updated = await response.json();
+      setMedicines(prev => prev.map(item => item.id === updated.id ? updated : item));
+      setEditingMedicine(null);
+      showToast("Medicine updated successfully.");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to update medicine", "error");
+    }
+  };
+
+  const handleSavePharmacyProfile = async (profile: PharmacyProfile) => {
+    try {
+      const isExisting = Boolean(profile.id);
+      const response = await fetch(isExisting ? `/pharmacies/${profile.id}` : "/pharmacies/", {
+        method: isExisting ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...profile,
+          user_id: profile.user_id ?? user.userId,
+          pharmacist_name: profile.pharmacist_name || user.name,
+          email: profile.email || user.email,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to save pharmacy profile");
+      const saved = await response.json();
+      setPharmacyProfile(saved);
+      setProfileOpen(false);
+      showToast("Store profile updated successfully.");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to save store profile", "error");
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      const response = await fetch(`/medicines/${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Failed to delete medicine");
+      setMedicines(p => p.filter(m => m.id !== id));
+      setDeleteConfirm(null);
+      showToast("Medicine removed.", "error");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to delete medicine", "error");
+    }
   };
 
   const toggleSort = (field: keyof Medicine) => {
@@ -282,7 +749,7 @@ export function PharmaAdmin() {
       const q = search.toLowerCase();
       const matchSearch = !q || m.name.toLowerCase().includes(q) || m.brand.toLowerCase().includes(q) || m.manufacturer.toLowerCase().includes(q);
       const matchCat = filterCategory === "All" || m.category === filterCategory;
-      const matchStatus = filterStatus === "All" || getStockStatus(m.stock, m.minStock) === filterStatus;
+      const matchStatus = filterStatus === "All" || getStockStatus(m.stock, m.min_stock) === filterStatus;
       return matchSearch && matchCat && matchStatus;
     })
     .sort((a, b) => {
@@ -295,14 +762,28 @@ export function PharmaAdmin() {
     });
 
   const totalMeds = medicines.length;
-  const inStock = medicines.filter(m => getStockStatus(m.stock, m.minStock) === "In Stock").length;
-  const lowStock = medicines.filter(m => getStockStatus(m.stock, m.minStock) === "Low Stock").length;
-  const outOfStock = medicines.filter(m => getStockStatus(m.stock, m.minStock) === "Out of Stock").length;
-  const prescriptionOnly = medicines.filter(m => m.prescription).length;
+  const inStock = medicines.filter(m => getStockStatus(m.stock, m.min_stock) === "In Stock").length;
+  const lowStock = medicines.filter(m => getStockStatus(m.stock, m.min_stock) === "Low Stock").length;
+  const outOfStock = medicines.filter(m => getStockStatus(m.stock, m.min_stock) === "Out of Stock").length;
+  const prescriptionOnly = medicines.filter(m => m.prescription_required).length;
 
   const SortIcon = ({ field }: { field: keyof Medicine }) => (
     <ArrowUpDown className={`w-3.5 h-3.5 ml-1 inline transition-colors ${sortField === field ? "text-[#4F7DF3]" : "text-[#CBD5E1]"}`} />
   );
+
+  if (user.role !== "pharmacy") {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center px-4">
+        <div className="max-w-lg w-full bg-white rounded-3xl p-8 border border-[rgba(79,125,243,0.08)] shadow-[0_1px_3px_rgba(0,0,0,0.06)] text-center">
+          <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+          <h1 className="text-2xl font-bold text-[#1E293B] mb-2">Pharmacist Access Only</h1>
+          <p className="text-sm text-[#64748B]">This inventory and stock-adding workflow is only available for pharmacy accounts.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
@@ -336,12 +817,26 @@ export function PharmaAdmin() {
       )}
 
       {/* Modal */}
-      {modalOpen && (
-        <FormModal
-          initial={formInitial}
-          editingId={editingId}
-          onSave={handleSave}
-          onClose={() => setModalOpen(false)}
+      {addOpen && (
+        <AddStockModal
+          onSave={handleAddStock}
+          onClose={() => setAddOpen(false)}
+        />
+      )}
+
+      {editingMedicine && (
+        <EditModal
+          initial={editingMedicine}
+          onSave={handleSaveEdit}
+          onClose={() => setEditingMedicine(null)}
+        />
+      )}
+
+      {profileOpen && pharmacyProfile && (
+        <PharmacyProfileModal
+          initial={pharmacyProfile}
+          onSave={handleSavePharmacyProfile}
+          onClose={() => setProfileOpen(false)}
         />
       )}
 
@@ -360,11 +855,50 @@ export function PharmaAdmin() {
               Export
             </button>
             <button
-              onClick={openAdd}
+              onClick={() => loadMedicines()}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-[rgba(0,0,0,0.1)] text-[#64748B] hover:bg-white text-sm font-medium transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </button>
+            <button
+              onClick={() => setAddOpen(true)}
               className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#4F7DF3] hover:bg-[#3D6DE3] text-white text-sm font-bold transition-colors shadow-[0_2px_10px_rgba(79,125,243,0.35)]"
             >
               <Plus className="w-4 h-4" />
-              Add Medicine
+              Add Stock
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </div>
+        )}
+
+        <div className="bg-white rounded-2xl border border-[rgba(79,125,243,0.08)] shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div>
+              <div className="text-xs font-semibold tracking-widest uppercase text-[#94A3B8] mb-1">Store Profile</div>
+              <h2 className="text-xl font-bold text-[#1E293B]">
+                {profileLoading ? "Loading store..." : (pharmacyProfile?.store_name || "Set your store name")}
+              </h2>
+              <p className="text-sm text-[#64748B] mt-1">
+                {pharmacyProfile?.address
+                  ? [pharmacyProfile.address, pharmacyProfile.city, pharmacyProfile.state].filter(Boolean).join(", ")
+                  : "Add your pharmacy details so you can keep your storefront information up to date."}
+              </p>
+              {pharmacyProfile?.phone && (
+                <p className="text-xs text-[#94A3B8] mt-2">Phone: {pharmacyProfile.phone}</p>
+              )}
+            </div>
+            <button
+              onClick={() => pharmacyProfile && setProfileOpen(true)}
+              disabled={profileLoading || !pharmacyProfile}
+              className="px-5 py-2.5 rounded-full bg-white border border-[#4F7DF3] text-[#4F7DF3] hover:bg-[#EEF2FF] disabled:opacity-60 disabled:cursor-not-allowed text-sm font-semibold transition-colors"
+            >
+              Edit Store Profile
             </button>
           </div>
         </div>
@@ -433,13 +967,15 @@ export function PharmaAdmin() {
 
           {/* Mobile card list — visible only on xs */}
           <div className="sm:hidden">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div className="py-12 text-center text-[#94A3B8] text-sm">Loading medicines...</div>
+            ) : filtered.length === 0 ? (
               <div className="py-12 text-center text-[#94A3B8] text-sm">
                 <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 No medicines found.
               </div>
             ) : filtered.map((m) => {
-              const status = getStockStatus(m.stock, m.minStock);
+              const status = getStockStatus(m.stock, m.min_stock);
               const stockBarColor = status === "In Stock" ? "#22c55e" : status === "Low Stock" ? "#f59e0b" : "#f43f5e";
               return (
                 <div key={m.id} className="p-4 border-b border-[rgba(0,0,0,0.04)] last:border-0 hover:bg-[#F8FAFC]">
@@ -449,14 +985,14 @@ export function PharmaAdmin() {
                       <p className="text-xs text-[#94A3B8] mt-0.5">{m.brand} · {m.manufacturer}</p>
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      <button onClick={() => openEdit(m)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#EEF2FF] text-[#4F7DF3] transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setEditingMedicine(m)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#EEF2FF] text-[#4F7DF3] transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
                       <button onClick={() => setDeleteConfirm(m.id)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-rose-50 text-rose-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5 mb-3">
                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${categoryColors[m.category]}`}>{categoryIcons[m.category]}{m.category}</span>
                     <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${stockStatusStyles[status]}`}>{status}</span>
-                    {m.prescription && <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 text-[10px] font-semibold">Rx</span>}
+                    {m.prescription_required && <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 text-[10px] font-semibold">Rx</span>}
                   </div>
                   <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
                     <div className="bg-[#F8FAFC] rounded-lg p-2">
@@ -508,7 +1044,13 @@ export function PharmaAdmin() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[rgba(0,0,0,0.04)]">
-                {filtered.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="py-16 text-center text-[#94A3B8] text-sm">
+                      Loading medicines...
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-16 text-center text-[#94A3B8] text-sm">
                       <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
@@ -516,8 +1058,8 @@ export function PharmaAdmin() {
                     </td>
                   </tr>
                 ) : filtered.map((m) => {
-                  const status = getStockStatus(m.stock, m.minStock);
-                  const stockPct = Math.min((m.stock / (m.stock + m.minStock)) * 100, 100);
+                  const status = getStockStatus(m.stock, m.min_stock);
+                  const stockPct = Math.min((m.stock / Math.max(m.stock + m.min_stock, 1)) * 100, 100);
                   const stockBarColor = status === "In Stock" ? "#22c55e" : status === "Low Stock" ? "#f59e0b" : "#f43f5e";
                   return (
                     <tr key={m.id} className="hover:bg-[#F8FAFC] transition-colors group">
@@ -525,7 +1067,7 @@ export function PharmaAdmin() {
                       <td className="px-5 py-4">
                         <div className="font-semibold text-[#1E293B]">{m.name}</div>
                         <div className="text-xs text-[#94A3B8] mt-0.5">{m.brand} · {m.manufacturer}</div>
-                        {m.prescription && (
+                        {m.prescription_required && (
                           <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 text-[10px] font-semibold">
                             Rx
                           </span>
@@ -559,7 +1101,7 @@ export function PharmaAdmin() {
                           </div>
                           <span className="text-xs font-bold" style={{ color: stockBarColor }}>{m.stock}</span>
                         </div>
-                        <div className="text-[10px] text-[#94A3B8] mt-0.5">min: {m.minStock}</div>
+                        <div className="text-[10px] text-[#94A3B8] mt-0.5">min: {m.min_stock}</div>
                       </td>
 
                       {/* Expiry */}
@@ -578,7 +1120,7 @@ export function PharmaAdmin() {
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
-                            onClick={() => openEdit(m)}
+                            onClick={() => setEditingMedicine(m)}
                             className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#EEF2FF] text-[#4F7DF3] transition-colors"
                             title="Edit"
                           >
