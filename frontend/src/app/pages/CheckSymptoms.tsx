@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { AlertCircle, CheckCircle, Clock, Thermometer, Activity, Trash2, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { AlertCircle, CheckCircle, Clock, Thermometer, Activity, Trash2, Loader2, Bot, Send } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 interface SavedSymptom {
@@ -16,17 +16,31 @@ interface PatientData {
   symptoms: SavedSymptom[];
 }
 
+interface ChatMessage {
+  id: string;
+  role: "user" | "bot";
+  text: string;
+  time: string;
+}
+
 export function CheckSymptoms() {
   const { user } = useAuth();
-  
+
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [duration, setDuration] = useState("");
-  
+
   const [patient, setPatient] = useState<PatientData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+
+  // ── AI Chat state ──────────────────────────────────────────────────────────
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const commonSymptoms = [
     { id: "fever", label: "Fever", icon: Thermometer },
@@ -42,6 +56,11 @@ export function CheckSymptoms() {
     { id: "rash", label: "Skin Rash", icon: Activity },
     { id: "dizziness", label: "Dizziness", icon: Activity },
   ];
+
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
 
   // Fetch patient data on mount
   useEffect(() => {
@@ -83,14 +102,122 @@ export function CheckSymptoms() {
     );
   };
 
+  // ── Call AI analysis ──────────────────────────────────────────────────────
+  const callAIAnalysis = async (symptomLabels: string[], dur: string) => {
+    setChatLoading(true);
+    setShowChat(true);
+
+    // Add user message showing what was sent
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      text: `My symptoms: ${symptomLabels.join(", ")}\nDuration: ${dur}`,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    setChatMessages((prev) => [...prev, userMsg]);
+
+    try {
+      const res = await fetch("/patients/ai/symptom-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symptom_names: symptomLabels,
+          duration: dur,
+        }),
+      });
+
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        const rawText = await res.text();
+        throw new Error(`Server error: ${rawText.slice(0, 100)}...`);
+      }
+
+      if (!res.ok) {
+        throw new Error(data.detail || "AI analysis failed");
+      }
+
+      const botMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "bot",
+        text: data.analysis,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setChatMessages((prev) => [...prev, botMsg]);
+    } catch (err) {
+      const errMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "bot",
+        text: `Sorry, I couldn't analyze your symptoms right now. ${err instanceof Error ? err.message : "Please try again."}`,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setChatMessages((prev) => [...prev, errMsg]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  // ── Send custom follow-up message ─────────────────────────────────────────
+  const handleChatSend = async () => {
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+
+    setChatInput("");
+    setChatLoading(true);
+
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      text,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    setChatMessages((prev) => [...prev, userMsg]);
+
+    try {
+      // Re-use the same endpoint with the follow-up as a symptom description
+      const res = await fetch("/patients/ai/symptom-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symptom_names: [text],
+          duration: "Not specified",
+        }),
+      });
+
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        const rawText = await res.text();
+        throw new Error(`Server error: ${rawText.slice(0, 100)}...`);
+      }
+      
+      if (!res.ok) throw new Error(data.detail || "AI failed");
+
+      const botMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "bot",
+        text: data.analysis,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setChatMessages((prev) => [...prev, botMsg]);
+    } catch (err) {
+      const errMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "bot",
+        text: `Sorry, something went wrong. ${err instanceof Error ? err.message : ""}`,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setChatMessages((prev) => [...prev, errMsg]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   const handleAddSymptom = async () => {
     if (selectedSymptoms.length === 0 || !duration) {
       setError("Please select at least one symptom and duration");
-      return;
-    }
-
-    if (!patient || !patient.id) {
-      setError("Patient record not found. Please try again.");
       return;
     }
 
@@ -103,35 +230,40 @@ export function CheckSymptoms() {
         (symptomId) => commonSymptoms.find((symptom) => symptom.id === symptomId)?.label || symptomId
       );
 
-      const res = await fetch(`/patients/${patient.id}/symptoms/batch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          symptom_names: symptomNames,
-          duration,
-        }),
-      });
+      // Save to patient record if one exists (optional — AI works either way)
+      if (patient && patient.id) {
+        const res = await fetch(`/patients/${patient.id}/symptoms/batch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            symptom_names: symptomNames,
+            duration,
+          }),
+        });
 
-      if (!res.ok) {
-        const errorData = await res.text();
-        throw new Error(`Failed to save symptoms: ${errorData}`);
+        if (res.ok) {
+          const refreshRes = await fetch(`/patients/by-user/${user.userId}`);
+          if (refreshRes.ok) {
+            const data: PatientData = await refreshRes.json();
+            setPatient(data);
+          }
+          setSuccessMessage(`${symptomNames.length} symptom(s) saved & AI analysis started.`);
+        } else {
+          setSuccessMessage("AI analysis started (symptoms not saved — no patient profile).");
+        }
+      } else {
+        setSuccessMessage("AI analysis started.");
       }
 
-      const count = symptomNames.length;
-      const refreshRes = await fetch(`/patients/by-user/${user.userId}`);
-      if (refreshRes.ok) {
-        const data: PatientData = await refreshRes.json();
-        setPatient(data);
-      }
+      setTimeout(() => setSuccessMessage(""), 3000);
+
+      // ⚡ Always trigger AI analysis — works for everyone
+      callAIAnalysis(symptomNames, duration);
 
       setSelectedSymptoms([]);
       setDuration("");
-      setSuccessMessage(`${count} symptom record(s) saved successfully.`);
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save symptom");
+      setError(err instanceof Error ? err.message : "Something went wrong");
       console.error("Save error:", err);
     } finally {
       setSaving(false);
@@ -158,7 +290,6 @@ export function CheckSymptoms() {
 
       if (!res.ok) throw new Error("Failed to remove symptom");
 
-      // Refresh patient data
       const res2 = await fetch(`/patients/by-user/${user.userId}`);
       if (res2.ok) {
         const data: PatientData = await res2.json();
@@ -215,7 +346,7 @@ export function CheckSymptoms() {
             Check Your Symptoms
           </h1>
           <p className="text-lg text-[#64748B]">
-            Log your symptoms and track them automatically with timestamps
+            Log your symptoms and get instant AI-powered health insights
           </p>
         </div>
 
@@ -248,11 +379,10 @@ export function CheckSymptoms() {
                   <button
                     key={symptom.id}
                     onClick={() => toggleSymptom(symptom.id)}
-                    className={`p-4 rounded-2xl border-2 transition-all ${
-                      isSelected
-                        ? "border-[#4F7DF3] bg-[#4F7DF3]/5"
-                        : "border-gray-200 hover:border-[#4F7DF3]/50"
-                    }`}
+                    className={`p-4 rounded-2xl border-2 transition-all ${isSelected
+                      ? "border-[#4F7DF3] bg-[#4F7DF3]/5"
+                      : "border-gray-200 hover:border-[#4F7DF3]/50"
+                      }`}
                   >
                     <Icon
                       className="w-6 h-6 mx-auto mb-2"
@@ -283,11 +413,10 @@ export function CheckSymptoms() {
                 <button
                   key={option}
                   onClick={() => setDuration(option)}
-                  className={`p-4 rounded-2xl border-2 transition-all ${
-                    duration === option
-                      ? "border-[#4F7DF3] bg-[#4F7DF3]/5"
-                      : "border-gray-200 hover:border-[#4F7DF3]/50"
-                  }`}
+                  className={`p-4 rounded-2xl border-2 transition-all ${duration === option
+                    ? "border-[#4F7DF3] bg-[#4F7DF3]/5"
+                    : "border-gray-200 hover:border-[#4F7DF3]/50"
+                    }`}
                 >
                   <Clock
                     className="w-6 h-6 mx-auto mb-2"
@@ -311,11 +440,10 @@ export function CheckSymptoms() {
           <button
             onClick={handleAddSymptom}
             disabled={selectedSymptoms.length === 0 || !duration || saving}
-            className={`w-full px-8 py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 font-semibold ${
-              selectedSymptoms.length === 0 || !duration || saving
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-[#4F7DF3] text-white hover:bg-[#3D6DE3]"
-            }`}
+            className={`w-full px-8 py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 font-semibold ${selectedSymptoms.length === 0 || !duration || saving
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-[#4F7DF3] text-white hover:bg-[#3D6DE3]"
+              }`}
           >
             {saving ? (
               <>
@@ -323,10 +451,101 @@ export function CheckSymptoms() {
                 Saving...
               </>
             ) : (
-              `Save ${selectedSymptoms.length} Symptom(s)`
+              `Save ${selectedSymptoms.length} Symptom(s) & Get AI Insights`
             )}
           </button>
         </div>
+
+        {/* ── AI Chat Box ─────────────────────────────────────────────────── */}
+        {showChat && (
+          <div className="bg-white rounded-2xl shadow-sm mb-6 overflow-hidden border border-[#4F7DF3]/20">
+            {/* Chat Header */}
+            <div className="bg-gradient-to-r from-[#4F7DF3] to-[#6C63FF] px-6 py-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                <Bot className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-white font-semibold">RuralCare AI Assistant</h3>
+                <p className="text-white/70 text-xs">Helping you understand your symptoms</p>
+              </div>
+              {chatLoading && (
+                <Loader2 className="w-5 h-5 text-white animate-spin ml-auto" />
+              )}
+            </div>
+
+            {/* Messages */}
+            <div className="max-h-[400px] overflow-y-auto px-4 py-4 space-y-4 bg-[#F8FAFC]">
+              {chatMessages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[85%] ${msg.role === "user"
+                      ? "bg-[#4F7DF3] text-white rounded-2xl rounded-br-md"
+                      : "bg-white text-[#1E293B] rounded-2xl rounded-bl-md border border-gray-200"
+                      } px-4 py-3 shadow-sm`}
+                  >
+                    {msg.role === "bot" && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <Bot className="w-4 h-4 text-[#4F7DF3]" />
+                        <span className="text-xs font-semibold text-[#4F7DF3]">AI Assistant</span>
+                      </div>
+                    )}
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                    <p className={`text-[10px] mt-2 ${msg.role === "user" ? "text-white/60 text-right" : "text-[#94A3B8]"}`}>
+                      {msg.time}
+                    </p>
+                  </div>
+                </div>
+              ))}
+
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-white rounded-2xl rounded-bl-md border border-gray-200 px-4 py-3 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <Bot className="w-4 h-4 text-[#4F7DF3]" />
+                      <div className="flex gap-1">
+                        <span className="w-2 h-2 bg-[#4F7DF3] rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></span>
+                        <span className="w-2 h-2 bg-[#4F7DF3] rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></span>
+                        <span className="w-2 h-2 bg-[#4F7DF3] rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Chat Input */}
+            <div className="px-4 py-3 bg-white border-t border-gray-200">
+              <form
+                onSubmit={(e) => { e.preventDefault(); handleChatSend(); }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Ask a follow-up question..."
+                  disabled={chatLoading}
+                  className="flex-1 px-4 py-3 rounded-2xl bg-[#F1F5F9] border border-gray-200 focus:outline-none focus:border-[#4F7DF3] focus:ring-2 focus:ring-[#4F7DF3]/20 text-sm text-[#1E293B] placeholder-[#94A3B8] disabled:opacity-50 transition-all"
+                />
+                <button
+                  type="submit"
+                  disabled={chatLoading || !chatInput.trim()}
+                  className="p-3 rounded-2xl bg-[#4F7DF3] text-white hover:bg-[#3D6DE3] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </form>
+              <p className="text-[10px] text-[#94A3B8] mt-2 text-center">
+                ⚠️ This is not a medical diagnosis. Always consult a doctor for professional advice.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Saved Symptoms Timeline */}
         {patient && patient.symptoms && patient.symptoms.length > 0 && (

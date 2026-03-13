@@ -609,7 +609,8 @@ export function PharmaAdmin() {
       const response = await fetch(`/pharmacies/?user_id=${user.userId}`);
       if (!response.ok) throw new Error("Failed to load pharmacy profile");
       const data: PharmacyProfile[] = await response.json();
-      setPharmacyProfile(data[0] ?? emptyPharmacyProfile(user.userId, user.name, user.email));
+      const profile = data[0] ?? emptyPharmacyProfile(user.userId, user.name, user.email);
+      setPharmacyProfile(profile);
     } catch {
       setPharmacyProfile(emptyPharmacyProfile(user.userId, user.name, user.email));
     } finally {
@@ -618,22 +619,20 @@ export function PharmaAdmin() {
   };
 
   const loadMedicines = async (options?: { search?: string; category?: "All" | Category; status?: "All" | StockStatus }) => {
+    if (!pharmacyProfile?.id) return;
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ limit: "500" });
-      const nextSearch = options?.search ?? search;
-      const nextCategory = options?.category ?? filterCategory;
-      const nextStatus = options?.status ?? filterStatus;
-
-      if (nextSearch.trim()) params.set("q", nextSearch.trim());
-      if (nextCategory !== "All") params.set("category", nextCategory);
-      if (nextStatus !== "All") params.set("status", nextStatus);
-
-      const response = await fetch(`/medicines/?${params.toString()}`);
-      if (!response.ok) throw new Error(`Failed to load medicines (${response.status})`);
+      const response = await fetch(`/pharmacies/${pharmacyProfile.id}/inventory`);
+      if (!response.ok) throw new Error(`Failed to load inventory (${response.status})`);
       const data = await response.json();
-      setMedicines(data);
+      
+      const mappedMedicines = data.map((inv: any) => ({
+        ...inv.medicine,
+        stock: inv.quantity_available
+      }));
+
+      setMedicines(mappedMedicines);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load medicines");
     } finally {
@@ -642,12 +641,13 @@ export function PharmaAdmin() {
   };
 
   useEffect(() => {
+    if (!pharmacyProfile?.id) return;
     const timeout = window.setTimeout(() => {
       loadMedicines();
     }, 180);
 
     return () => window.clearTimeout(timeout);
-  }, [search, filterCategory, filterStatus]);
+  }, [search, filterCategory, filterStatus, pharmacyProfile?.id]);
 
   useEffect(() => {
     loadPharmacyProfile();
@@ -659,46 +659,62 @@ export function PharmaAdmin() {
   };
 
   const handleAddStock = async (payload: { mode: "existing"; medicine: Medicine; quantity: number } | { mode: "new"; medicine: Omit<Medicine, "id">; quantity: number }) => {
+    if (!pharmacyProfile?.id) {
+      showToast("Store profile must be created first", "error");
+      return;
+    }
+    
     try {
+      let medId: number;
       if (payload.mode === "existing") {
-        const response = await fetch(`/medicines/${payload.medicine.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload.medicine, stock: payload.medicine.stock + payload.quantity }),
-        });
-        if (!response.ok) throw new Error("Failed to update stock");
-        const updated = await response.json();
-        setMedicines(prev => prev.map(medicine => medicine.id === updated.id ? updated : medicine));
-        showToast("Stock added successfully.");
+        medId = payload.medicine.id;
       } else {
         const response = await fetch("/medicines/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload.medicine, stock: payload.quantity }),
+          body: JSON.stringify({ ...payload.medicine, stock: 0 }), // global stock not used
         });
         if (!response.ok) throw new Error("Failed to create medicine");
         const created = await response.json();
-        setMedicines(prev => [created, ...prev]);
-        showToast("Medicine created and stock added.");
+        medId = created.id;
       }
+
+      const invResponse = await fetch(`/pharmacies/${pharmacyProfile.id}/inventory`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ medicine_id: medId, quantity_added: payload.quantity }),
+      });
+      if (!invResponse.ok) throw new Error("Failed to update inventory");
+      
+      showToast(payload.mode === "new" ? "Medicine created and stock added." : "Stock added successfully.");
       setAddOpen(false);
+      loadMedicines(); // Reload inventory to reflect new data
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to save medicine", "error");
+      showToast(err instanceof Error ? err.message : "Failed to add stock", "error");
     }
   };
 
   const handleSaveEdit = async (medicine: Medicine) => {
+    if (!pharmacyProfile?.id) return;
     try {
       const response = await fetch(`/medicines/${medicine.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(medicine),
+        // Don't modify global stock!
+        body: JSON.stringify({...medicine, stock: 0}), 
       });
-      if (!response.ok) throw new Error("Failed to update medicine");
-      const updated = await response.json();
-      setMedicines(prev => prev.map(item => item.id === updated.id ? updated : item));
-      setEditingMedicine(null);
+      if (!response.ok) throw new Error("Failed to update medicine details");
+      
+      const invResponse = await fetch(`/pharmacies/${pharmacyProfile.id}/inventory/${medicine.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity_available: medicine.stock }),
+      });
+      if (!invResponse.ok) throw new Error("Failed to update inventory quantity");
+
       showToast("Medicine updated successfully.");
+      setEditingMedicine(null);
+      loadMedicines(); // Reload to reflect changes
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to update medicine", "error");
     }
@@ -728,8 +744,9 @@ export function PharmaAdmin() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!pharmacyProfile?.id) return;
     try {
-      const response = await fetch(`/medicines/${id}`, { method: "DELETE" });
+      const response = await fetch(`/pharmacies/${pharmacyProfile.id}/inventory/${id}`, { method: "DELETE" });
       if (!response.ok) throw new Error("Failed to delete medicine");
       setMedicines(p => p.filter(m => m.id !== id));
       setDeleteConfirm(null);

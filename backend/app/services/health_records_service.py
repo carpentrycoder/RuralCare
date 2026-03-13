@@ -9,8 +9,7 @@ from app.settings import Settings
 
 settings = Settings()
 
-API_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_MODEL = "openai/gpt-4o-mini"
+API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 def _build_multipart_body(
@@ -99,11 +98,13 @@ Tone Examples:
 
 
 def analyze_report_image(file_bytes: bytes, content_type: str, custom_prompt: str = "") -> dict:
-    api_key = settings.OPENROUTER_API_KEY
-    if not api_key:
-        raise RuntimeError("OPENROUTER_API_KEY is not configured in backend environment")
+    import httpx
 
-    model = settings.OPENROUTER_MODEL or DEFAULT_MODEL
+    api_key = settings.GROQ_API_KEY
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY is not configured in backend environment")
+
+    model = settings.GROQ_VISION_MODEL or "llama-3.2-90b-vision-preview"
     image_b64 = base64.b64encode(file_bytes).decode("utf-8")
     image_url = f"data:{content_type};base64,{image_b64}"
 
@@ -122,26 +123,24 @@ def analyze_report_image(file_bytes: bytes, content_type: str, custom_prompt: st
         "max_tokens": 1500,
     }
 
-    req = request.Request(
-        API_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost:8000",
-            "X-Title": "Swasth AI Health Records",
-        },
-        method="POST",
-    )
-
     try:
+        req = request.Request(
+            API_URL,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "RuralCare/1.0",
+            },
+            method="POST",
+        )
         with request.urlopen(req, timeout=90) as response:
             response_data = json.loads(response.read().decode("utf-8"))
     except error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"OpenRouter HTTP {exc.code}: {body}") from exc
+        raise RuntimeError(f"Groq HTTP {exc.code}: {body}") from exc
     except error.URLError as exc:
-        raise RuntimeError(f"OpenRouter request failed: {exc.reason}") from exc
+        raise RuntimeError(f"Groq request failed: {exc.reason}") from exc
 
     explanation = (
         response_data.get("choices", [{}])[0]

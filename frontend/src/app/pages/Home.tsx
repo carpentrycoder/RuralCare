@@ -68,7 +68,7 @@ export function Home() {
                 className="text-3xl md:text-4xl lg:text-5xl text-[#1E293B] mb-6"
                 style={{ fontWeight: 700, lineHeight: 1.2 }}
               >
-                Healthcare Access for Every Village
+                Healthcare Access for Every Rural Area
               </h1>
               <p className="text-lg md:text-xl text-[#64748B] mb-8 leading-relaxed">
                 Consult doctors online, check symptoms, find medicines nearby, and manage

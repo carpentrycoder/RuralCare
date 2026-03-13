@@ -8,8 +8,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str
     DEBUG: bool
     DATABASE_URL: str
-    OPENROUTER_API_KEY: str = ""
-    OPENROUTER_MODEL: str = "openai/gpt-4o-mini"
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_VISION_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"
     CLOUDINARY_CLOUD_NAME: str = ""
     CLOUDINARY_UPLOAD_PRESET: str = ""
     CLOUDINARY_API_KEY: str = ""

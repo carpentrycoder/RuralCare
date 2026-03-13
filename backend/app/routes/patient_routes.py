@@ -1,14 +1,48 @@
 from datetime import datetime
 from typing import Any, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Patient, SymptomRecord
+from app.settings import Settings
+
+_settings = Settings()
 
 router = APIRouter(prefix="/patients", tags=["Patients"])
+
+# ── AI Symptom Analysis config ───────────────────────────────────────────────
+
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+SYMPTOM_MASTER_PROMPT = """
+You are a careful medical information assistant.
+
+Your role:
+Explain what medical conditions MIGHT be associated with the patient's symptoms.
+
+STRICT RULES:
+- Do NOT give a definitive diagnosis.
+- Only suggest POSSIBLE conditions based on symptoms.
+- If uncertain, say that the symptoms are not enough for a clear conclusion.
+- Do NOT invent symptoms or patient history.
+- Do NOT suggest specific medicines.
+- Encourage consulting a doctor when appropriate.
+- Be calm and reassuring.
+
+Response format:
+1. Brief explanation of what the symptoms may indicate.
+2. List possible conditions with short explanation.
+3. Explain why these conditions might match the symptoms.
+4. Mention that only a doctor can confirm diagnosis.
+5. Suggest next steps (doctor visit, tests, monitoring symptoms).
+
+Use simple English that patients can understand.
+"""
+
 
 
 def current_local_timestamp() -> datetime:
@@ -278,3 +312,76 @@ def remove_symptom(
 
     db.commit()
     return {"message": "Symptom removed", "patient_id": patient_id}
+
+
+# ── AI Symptom Analysis ─────────────────────────────────────────────────────
+
+
+class SymptomAnalysisIn(BaseModel):
+    symptom_names: list[str]
+    duration: str
+
+
+@router.post("/ai/symptom-analysis")
+async def analyze_symptoms(data: SymptomAnalysisIn):
+    import json as _json
+    from urllib import request, error
+
+    api_key = _settings.GROQ_API_KEY
+    if not api_key:
+        raise HTTPException(status_code=500, detail="GROQ_API_KEY is not configured")
+
+    model = _settings.GROQ_MODEL or "llama-3.3-70b-versatile"
+    symptom_text = ", ".join(data.symptom_names)
+
+    user_prompt = f"""
+Patient symptoms: {symptom_text}
+Duration: {data.duration}
+
+Explain what possible health conditions these symptoms may indicate.
+"""
+
+    try:
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": SYMPTOM_MASTER_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+
+        req = request.Request(
+            GROQ_API_URL,
+            data=_json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "RuralCare/1.0",
+            },
+            method="POST",
+        )
+
+        try:
+            with request.urlopen(req, timeout=60) as resp:
+                result = _json.loads(resp.read().decode("utf-8"))
+        except error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="ignore")
+            raise HTTPException(status_code=500, detail=f"Groq HTTP {exc.code}: {body}")
+        except error.URLError as exc:
+            raise HTTPException(status_code=500, detail=f"Groq request failed: {exc.reason}")
+
+        if "choices" not in result:
+            raise HTTPException(status_code=500, detail=f"AI API Error: {result}")
+
+        ai_output = result["choices"][0]["message"]["content"]
+
+        return {
+            "symptoms": data.symptom_names,
+            "duration": data.duration,
+            "analysis": ai_output,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=f"Internal Failure: {str(e)}\n{traceback.format_exc()}")

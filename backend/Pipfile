@@ -8,6 +8,7 @@ fastapi = "*"
 aiortc = "*"
 uvicorn = "*"
 gunicorn = "*"
+httpx = "*"
 pydantic = {extras = ["dotenv"], version = "*"}
 jinja2 = "*"
 python-multipart = "*"

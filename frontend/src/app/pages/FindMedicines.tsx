@@ -106,6 +106,33 @@ export function FindMedicines() {
     };
   }, [selectedMedicine]);
 
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setMedicineSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setLoadingMedicines(true);
+      try {
+        const res = await fetch(`/medicines/?q=${encodeURIComponent(searchQuery)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setMedicineSuggestions(data);
+        } else {
+          setMedicineSuggestions([]);
+        }
+      } catch (err) {
+        console.error("Failed to search medicines:", err);
+        setMedicineSuggestions([]);
+      } finally {
+        setLoadingMedicines(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] py-8 md:py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -206,11 +233,36 @@ export function FindMedicines() {
                     <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
                     No pharmacies available at the moment.
                   </div>
-                ) : allPharmacies.map((pharmacy) => {
-                  const hasStock = selectedMedicine && availabilityMap[pharmacy.id] !== undefined;
-                  const quantity = availabilityMap[pharmacy.id] ?? 0;
+                ) : (
+                  (() => {
+                    let displayPharmacies = allPharmacies;
 
-                  return (
+                    // If a medicine is selected, ONLY show pharmacies that have it in stock
+                    if (selectedMedicine) {
+                      displayPharmacies = allPharmacies.filter(
+                        (p) => availabilityMap[p.id] !== undefined && availabilityMap[p.id] > 0
+                      );
+                    } else {
+                      // If no medicine selected, sort alphabetically or normally
+                      displayPharmacies = [...allPharmacies];
+                    }
+
+                    if (selectedMedicine && displayPharmacies.length === 0) {
+                      return (
+                        <div className="py-12 text-center text-[#64748B]">
+                          <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-30 text-rose-500" />
+                          <p>No nearby pharmacies currently have <strong>{selectedMedicine.name}</strong> in stock.</p>
+                        </div>
+                      );
+                    }
+
+                    return displayPharmacies.map((pharmacy) => {
+                      const hasStock = selectedMedicine && availabilityMap[pharmacy.id] !== undefined;
+                      const quantity = availabilityMap[pharmacy.id] ?? 0;
+                      
+                      console.log(`Pharmacy ${pharmacy.store_name} (ID: ${pharmacy.id}) - hasStock: ${hasStock}, quantity: ${quantity}, map:`, availabilityMap);
+
+                      return (
                     <div
                       key={pharmacy.id}
                       className={`p-6 rounded-2xl border-2 transition-all ${
@@ -307,7 +359,9 @@ export function FindMedicines() {
                     </div>
                   </div>
                   );
-                })}
+                    })
+                  })()
+                )}
               </div>
             </div>
           </div>
