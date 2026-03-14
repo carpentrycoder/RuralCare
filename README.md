@@ -114,26 +114,6 @@ RuralCare/
 └── README.md
 ```
 
----
-
-## 🔑 Environment Variables
-
-Create `backend/app/config/dev.env`:
-
-```env
-DEBUG=True
-LOG_LEVEL=INFO
-DATABASE_URL=postgresql://user:pass@host/dbname
-GROQ_API_KEY=your_groq_api_key
-GROQ_MODEL=llama-3.3-70b-versatile
-GROQ_VISION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_UPLOAD_PRESET=your_preset
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
-```
-
----
 
 ## 👥 User Roles
 
