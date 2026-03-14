@@ -143,16 +143,6 @@ RuralCare/
 
 ---
 
-## 🐳 Docker
-
-```bash
-cd backend
-docker-compose up --build
-# Backend runs on http://localhost:8080
-```
-
----
-
 ## 📄 License
 
 This project is for educational and demonstration purposes.
