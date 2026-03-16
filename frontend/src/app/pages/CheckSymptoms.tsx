@@ -465,7 +465,7 @@ export function CheckSymptoms() {
                 <Bot className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="text-white font-semibold">RuralCare AI Assistant</h3>
+                <h3 className="text-white font-semibold">SwasthAI Assistant</h3>
                 <p className="text-white/70 text-xs">Helping you understand your symptoms</p>
               </div>
               {chatLoading && (

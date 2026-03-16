@@ -232,7 +232,7 @@ export function HealthDashboard() {
               <ArrowLeft className="w-5 h-5 text-[#4F7DF3]" />
             </button>
             <div>
-              <div className="db-score-label mb-1">RuralCare · Personal Health Dashboard</div>
+              <div className="db-score-label mb-1">SwasthAI · Personal Health Dashboard</div>
               <h1 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 28, color: "#1E293B", margin: 0 }}>
                 Good morning, {healthData.name} 👋
               </h1>

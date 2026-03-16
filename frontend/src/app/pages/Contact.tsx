@@ -33,7 +33,7 @@ export function Contact() {
                 <h3 className="text-lg text-[#1E293B] mb-1" style={{ fontWeight: 600 }}>
                   Email
                 </h3>
-                <p className="text-[#64748B]">support@ruralcare.health</p>
+                <p className="text-[#64748B]">support@swasthai.health</p>
               </div>
             </div>
 

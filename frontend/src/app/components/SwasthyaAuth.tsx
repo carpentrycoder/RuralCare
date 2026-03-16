@@ -204,7 +204,7 @@ export default function SwasthyaAuth({ onClose }: SwasthyaAuthProps = {}) {
 
   // ─── Heading text per step ─────────────────────────────────────────────────
   const heading = activeTab === "login" ? "Welcome back"
-    : signupStep === "role"        ? "Join RuralCare"
+    : signupStep === "role"        ? "Join SwasthAI"
     : signupStep === "credentials" ? "Create your account"
     : "Complete your profile";
 
@@ -240,7 +240,7 @@ export default function SwasthyaAuth({ onClose }: SwasthyaAuthProps = {}) {
           <div className="w-[38px] h-[38px] rounded-full bg-[#4F7DF3] flex items-center justify-center shadow-[0_4px_12px_rgba(79,125,243,0.35)]">
             <Heart className="w-5 h-5 text-white" fill="white" />
           </div>
-          <span className="text-2xl font-bold text-[#1E293B] tracking-tight">RuralCare</span>
+          <span className="text-2xl font-bold text-[#1E293B] tracking-tight">SwasthAI</span>
         </a>
         <h2 className="mt-4 font-sans text-[1.3rem] font-semibold text-[#1E293B]">{heading}</h2>
         <p className="text-[0.82rem] text-[#64748B] font-sans mt-1">{subheading}</p>
