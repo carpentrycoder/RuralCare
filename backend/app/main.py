@@ -84,7 +84,7 @@ root_logger.setLevel(settings.LOG_LEVEL)
 async def index(
     request: Request,
 ) -> HTMLResponse:
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(name="index.html", context={"request": request})
 
 
 @app.get("/health", include_in_schema=False)
