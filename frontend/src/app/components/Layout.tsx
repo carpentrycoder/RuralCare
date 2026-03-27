@@ -42,7 +42,7 @@ export function Layout() {
                 <Heart className="w-6 h-6 text-white" fill="white" />
               </div>
               <span className="text-xl text-[#1E293B]" style={{ fontWeight: 600 }}>
-                RuralCare
+                SwasthAI
               </span>
             </Link>
 
@@ -192,7 +192,7 @@ export function Layout() {
                 <Heart className="w-5 h-5 text-white" fill="white" />
               </div>
               <span className="text-[#1E293B]" style={{ fontWeight: 600 }}>
-                RuralCare
+                SwasthAI
               </span>
             </div>
 

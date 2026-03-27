@@ -862,7 +862,7 @@ export function PharmaAdmin() {
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
-            <div className="text-xs font-semibold tracking-widest uppercase text-[#94A3B8] mb-1">RuralCare · Admin Panel</div>
+            <div className="text-xs font-semibold tracking-widest uppercase text-[#94A3B8] mb-1">SwasthAI · Admin Panel</div>
             <h1 className="text-2xl font-bold text-[#1E293B]">Pharmacy Inventory</h1>
             <p className="text-sm text-[#64748B] mt-0.5">Manage medicines, stock levels and pricing</p>
           </div>

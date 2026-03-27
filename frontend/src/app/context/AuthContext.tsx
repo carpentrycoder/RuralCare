@@ -19,7 +19,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const defaultUser: UserData = { name: "", email: "", phone: "", role: undefined, userId: undefined };
-const STORAGE_KEY = "ruralcare_user";
+const STORAGE_KEY = "swasthai_user";
 
 function loadStored(): { user: UserData; loggedIn: boolean } {
   try {

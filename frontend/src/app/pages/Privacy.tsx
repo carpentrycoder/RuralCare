@@ -15,7 +15,7 @@ export function Privacy() {
                 Your Privacy Matters
               </h2>
               <p>
-                At RuralCare, we are committed to protecting your personal and medical
+                At SwasthAI, we are committed to protecting your personal and medical
                 information. Your privacy and data security are our top priorities.
               </p>
             </section>

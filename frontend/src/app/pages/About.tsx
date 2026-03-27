@@ -7,11 +7,11 @@ export function About() {
             className="text-2xl md:text-3xl lg:text-4xl text-[#1E293B] mb-6"
             style={{ fontWeight: 700 }}
           >
-            About RuralCare
+            About SwasthAI
           </h1>
           <div className="space-y-4 text-[#64748B] leading-relaxed">
             <p>
-              RuralCare is a telemedicine platform designed specifically for rural communities,
+              SwasthAI is a telemedicine platform designed specifically for rural communities,
               providing accessible healthcare services to villages and remote areas.
             </p>
             <p>

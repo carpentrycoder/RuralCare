@@ -130,7 +130,7 @@ def analyze_report_image(file_bytes: bytes, content_type: str, custom_prompt: st
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
-                "User-Agent": "RuralCare/1.0",
+                "User-Agent": "SwasthAI/1.0",
             },
             method="POST",
         )
