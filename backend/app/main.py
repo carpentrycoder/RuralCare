@@ -24,7 +24,7 @@ from app.routes.patient_routes import router as patient_router
 from app.routes.pharmacist_routes import router as pharmacist_router
 from app.routes.pharmacy_routes import router as medicine_router
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).resolve().parent
 
 settings = Settings()
 
@@ -63,6 +63,8 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+print("BASE_DIR:", BASE_DIR)
+print("TEMPLATES PATH:", BASE_DIR / "templates")
 
 # 例外ハンドラの登録
 exception_handler.init_app(app)
@@ -81,10 +83,14 @@ root_logger.setLevel(settings.LOG_LEVEL)
 
 
 @app.get("/", include_in_schema=False)
-async def index(
-    request: Request,
-) -> HTMLResponse:
+async def index():
+    return {"message": "working"}
+
+
+@app.get("/test-template", include_in_schema=False)
+async def test_template(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+   
 
 
 @app.get("/health", include_in_schema=False)
