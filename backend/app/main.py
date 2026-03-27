@@ -64,7 +64,7 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 print("BASE_DIR:", BASE_DIR)
-print("TEMPLATES PATH:", BASE_DIR / "templates")
+print("TEMPLATES PATH-updated:", BASE_DIR / "templates")
 
 # 例外ハンドラの登録
 exception_handler.init_app(app)
